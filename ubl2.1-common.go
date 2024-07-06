@@ -1,4 +1,4 @@
-package main
+package myinvois
 
 // A character string (i.e. a finite set of characters), generally in the form of words of a
 // language.
