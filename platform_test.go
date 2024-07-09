@@ -67,3 +67,32 @@ func TestLoginAsTaxpayer(t *testing.T) {
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
 }
+
+func TestGetAllDocumentTypes(t *testing.T) {
+	assert := assert.New(t)
+
+	token, err := PlatformAPIClient.LoginAsTaxpayer(clientID, clientSecret)
+	assert.Nil(err)
+	assert.NotEmpty(token.AccessToken)
+
+	documentTypes, err := PlatformAPIClient.GetAllDocumentTypes(token.AccessToken)
+	assert.Nil(err)
+	assert.NotEmpty(documentTypes.Result)
+}
+
+func TestGetDocumentType(t *testing.T) {
+	assert := assert.New(t)
+
+	token, err := PlatformAPIClient.LoginAsTaxpayer(clientID, clientSecret)
+	assert.Nil(err)
+	assert.NotEmpty(token.AccessToken)
+
+	documentType, err := PlatformAPIClient.GetDocumentType(token.AccessToken, 1)
+	assert.Nil(err)
+	assert.NotEmpty(documentType)
+	assert.Equal(int64(1), documentType.ID)
+	assert.Equal(int64(1), documentType.InvoiceTypeCode)
+	assert.Equal("Invoice", documentType.Description)
+	assert.Greater(len(documentType.DocumentTypeVersions), 0)
+	assert.NotEmpty(documentType.DocumentTypeVersions)
+}
