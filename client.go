@@ -38,10 +38,8 @@ func newClient(opt Option) *Client {
 	} else {
 		apiURL = DefaultProductionURL
 	}
-
-	httpClient := &http.Client{Timeout: opt.Timeout}
-
 	u, _ := url.Parse(apiURL)
+	httpClient := &http.Client{Timeout: opt.Timeout}
 	c := &Client{
 		Endpoint:   u,
 		httpClient: httpClient,
