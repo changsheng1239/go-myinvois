@@ -1,6 +1,7 @@
 package myinvois
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,8 +26,9 @@ const (
 )
 
 var (
-	ErrHttpRequestFailed = errors.New("http request failed")
-	ErrReadBodyFailed    = errors.New("failed to read response body")
+	ErrInvalidTokenStructure = errors.New("invalid token structure")
+	ErrHttpRequestFailed     = errors.New("http request failed")
+	ErrReadBodyFailed        = errors.New("failed to read response body")
 )
 
 type platformEndpoints struct {
@@ -52,6 +54,61 @@ type OAuth2Token struct {
 	ExpiresIn   int    `json:"expires_in"`
 	TokenType   string `json:"token_type"`
 	Scope       string `json:"scope"`
+}
+
+type TokenPayload struct {
+	Iss               string   `json:"iss"`
+	Nbf               int      `json:"nbf"`
+	Iat               int      `json:"iat"`
+	Exp               int      `json:"exp"`
+	Aud               []string `json:"aud"`
+	Scope             []string `json:"scope"`
+	ClientID          string   `json:"client_id"`
+	IsTaxRepres       string   `json:"IsTaxRepres"`
+	IsIntermediary    string   `json:"IsIntermediary"`
+	IntermedID        string   `json:"IntermedId"`
+	IntermedTIN       string   `json:"IntermedTIN"`
+	IntermedEnforced  string   `json:"IntermedEnforced"`
+	Name              string   `json:"name"`
+	SSID              string   `json:"SSId"`
+	PreferredUsername string   `json:"preferred_username"`
+	TaxID             string   `json:"TaxId"`
+	TaxTin            string   `json:"TaxTin"`
+	ProfID            string   `json:"ProfId"`
+	IsTaxAdmin        string   `json:"IsTaxAdmin"`
+	IsSystem          string   `json:"IsSystem"`
+	NatID             string   `json:"NatId"`
+}
+
+func DecodeToken(token string) (*TokenPayload, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, ErrInvalidTokenStructure
+	}
+
+	// decode base64 parts[1]
+	claims := parts[1]
+	decodedPayload, err := decodeSegment(claims)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidTokenStructure, err)
+	}
+
+	var payload TokenPayload
+	err = json.Unmarshal(decodedPayload, &payload)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidTokenStructure, err)
+	}
+
+	return &payload, nil
+}
+
+func decodeSegment(seg string) ([]byte, error) {
+	if l := len(seg) % 4; l > 0 {
+		seg += strings.Repeat("=", 4-l)
+	}
+	encoding := base64.URLEncoding
+
+	return encoding.DecodeString(seg)
 }
 
 func (p *PlatformAPI) LoginAsTaxpayer(clientId, clientSecret string) (*OAuth2Token, error) {
