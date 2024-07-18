@@ -31,7 +31,7 @@ func (r *Ubl21Invoice) Marshal() ([]byte, error) {
 // available, or the result of an attempt made to obtain a general
 // license or permission for the use of such proprietary rights by
 // implementors or users of this specification, can be obtained from
-// the OASIS Executive Director.
+// theOASIS Executive Director.
 //
 // OASIS invites any interested party to bring to its attention any
 // copyrights, patents or patent applications, or other proprietary
@@ -64,20 +64,135 @@ func (r *Ubl21Invoice) Marshal() ([]byte, error) {
 // WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A
 // PARTICULAR PURPOSE.
 type Ubl21Invoice struct {
-	// Library ABIE XML namespace string (for ASBIEs)
-	A *string `json:"_A,omitempty"`
-	// BBIE XML namespace string
-	B *string `json:"_B,omitempty"`
 	// Document ABIE XML namespace string
-	D *string `json:"_D,omitempty"`
+	D string `json:"_D,omitempty"`
+	// Library ABIE XML namespace string (for ASBIEs)
+	A string `json:"_A,omitempty"`
+	// BBIE XML namespace string
+	B string `json:"_B,omitempty"`
 	// Extension scaffolding XML namespace string
-	E *string `json:"_E,omitempty"`
+	E string `json:"_E,omitempty"`
 	// A document used to request payment.
 	Invoice []InvoiceDetails `json:"Invoice"`
 }
 
 // A document used to request payment.
 type InvoiceDetails struct {
+	// An optional set of extensions to the committee model
+	UBLExtensions []UBLExtensions `json:"UBLExtensions,omitempty"`
+	// Identifies the earliest version of the UBL 2 schema for this document type that defines
+	// all of the elements that might be encountered in the current instance.
+	UBLVersionID []IdentifierType `json:"UBLVersionID,omitempty"`
+	// Identifies a user-defined customization of UBL for a specific use.
+	CustomizationID []IdentifierType `json:"CustomizationID,omitempty"`
+	// Identifies a user-defined profile of the customization of UBL being used.
+	ProfileID []IdentifierType `json:"ProfileID,omitempty"`
+	// Identifies an instance of executing a profile, to associate all transactions in a
+	// collaboration.
+	ProfileExecutionID []IdentifierType `json:"ProfileExecutionID,omitempty"`
+	// An identifier for this document, assigned by the sender.
+	ID []IdentifierType `json:"ID"`
+	// Indicates whether this document is a copy (true) or not (false).
+	CopyIndicator []IndicatorType `json:"CopyIndicator,omitempty"`
+	// A universally unique identifier for an instance of this document.
+	UUID []IdentifierType `json:"UUID,omitempty"`
+	// The date, assigned by the sender, on which this document was issued.
+	IssueDate []DateType `json:"IssueDate"`
+	// The time, assigned by the sender, at which this document was issued.
+	IssueTime []TimeType `json:"IssueTime"`
+	// The date on which Invoice is due.
+	DueDate []DateType `json:"DueDate,omitempty"`
+	// A code signifying the type of the Invoice.
+	InvoiceTypeCode []CodeType `json:"InvoiceTypeCode"`
+	// Free-form text pertinent to this document, conveying information that is not contained
+	// explicitly in other structures.
+	Note []TextType `json:"Note,omitempty"`
+	// The date of the Invoice, used to indicate the point at which tax becomes applicable.
+	TaxPointDate []DateType `json:"TaxPointDate,omitempty"`
+	// A code signifying the default currency for this document.
+	DocumentCurrencyCode []CodeType `json:"DocumentCurrencyCode"`
+	// A code signifying the currency used for tax amounts in the Invoice.
+	TaxCurrencyCode []CodeType `json:"TaxCurrencyCode,omitempty"`
+	// A code signifying the currency used for prices in the Invoice.
+	PricingCurrencyCode []CodeType `json:"PricingCurrencyCode,omitempty"`
+	// A code signifying the currency used for payment in the Invoice.
+	PaymentCurrencyCode []CodeType `json:"PaymentCurrencyCode,omitempty"`
+	// A code signifying the alternative currency used for payment in the Invoice.
+	PaymentAlternativeCurrencyCode []CodeType `json:"PaymentAlternativeCurrencyCode,omitempty"`
+	// The buyer's accounting code, applied to the Invoice as a whole.
+	AccountingCostCode []CodeType `json:"AccountingCostCode,omitempty"`
+	// The buyer's accounting code, applied to the Invoice as a whole, expressed as text.
+	AccountingCost []TextType `json:"AccountingCost,omitempty"`
+	// The number of lines in the document.
+	LineCountNumeric []NumericType `json:"LineCountNumeric,omitempty"`
+	// A reference provided by the buyer used for internal routing of the document.
+	BuyerReference []TextType `json:"BuyerReference,omitempty"`
+	// A period to which the Invoice applies.
+	InvoicePeriod []PeriodDetails `json:"InvoicePeriod,omitempty"`
+	// A reference to the Order with which this Invoice is associated.
+	OrderReference []OrderReferenceDetails `json:"OrderReference,omitempty"`
+	// A reference to a billing document associated with this document.
+	BillingReference []BillingReferenceDetails `json:"BillingReference"`
+	// A reference to a Despatch Advice associated with this document.
+	DespatchDocumentReference []DocumentReferenceDetails `json:"DespatchDocumentReference,omitempty"`
+	// A reference to a Receipt Advice associated with this document.
+	ReceiptDocumentReference []DocumentReferenceDetails `json:"ReceiptDocumentReference,omitempty"`
+	// A reference to a Statement associated with this document.
+	StatementDocumentReference []DocumentReferenceDetails `json:"StatementDocumentReference,omitempty"`
+	// A reference to an originator document associated with this document.
+	OriginatorDocumentReference []DocumentReferenceDetails `json:"OriginatorDocumentReference,omitempty"`
+	// A reference to a contract associated with this document.
+	ContractDocumentReference []DocumentReferenceDetails `json:"ContractDocumentReference,omitempty"`
+	// A reference to an additional document associated with this document.
+	AdditionalDocumentReference []DocumentReferenceDetails `json:"AdditionalDocumentReference,omitempty"`
+	// Information about a project.
+	ProjectReference []ProjectReferenceDetails `json:"ProjectReference,omitempty"`
+	// A signature applied to this document.
+	Signature []SignatureDetails `json:"Signature,omitempty"`
+	// The accounting supplier party.
+	AccountingSupplierParty []SupplierPartyDetails `json:"AccountingSupplierParty"`
+	// The accounting customer party.
+	AccountingCustomerParty []CustomerPartyDetails `json:"AccountingCustomerParty"`
+	// The payee.
+	PayeeParty []PartyDetails `json:"PayeeParty,omitempty"`
+	// The buyer.
+	BuyerCustomerParty []CustomerPartyDetails `json:"BuyerCustomerParty,omitempty"`
+	// The seller.
+	SellerSupplierParty []SupplierPartyDetails `json:"SellerSupplierParty,omitempty"`
+	// The tax representative.
+	TaxRepresentativeParty []PartyDetails `json:"TaxRepresentativeParty,omitempty"`
+	// A delivery associated with this document.
+	Delivery []DeliveryDetails `json:"Delivery,omitempty"`
+	// A set of delivery terms associated with this document.
+	DeliveryTerms []DeliveryTermsDetails `json:"DeliveryTerms,omitempty"`
+	// Expected means of payment.
+	PaymentMeans []PaymentMeansDetails `json:"PaymentMeans,omitempty"`
+	// A set of payment terms associated with this document.
+	PaymentTerms []PaymentTermsDetails `json:"PaymentTerms,omitempty"`
+	// A prepaid payment.
+	PrepaidPayment []PaymentDetails `json:"PrepaidPayment,omitempty"`
+	// A discount or charge that applies to a price component.
+	AllowanceCharge []AllowanceChargeDetails `json:"AllowanceCharge,omitempty"`
+	// The exchange rate between the document currency and the tax currency.
+	TaxExchangeRate []ExchangeRateDetails `json:"TaxExchangeRate,omitempty"`
+	// The exchange rate between the document currency and the pricing currency.
+	PricingExchangeRate []ExchangeRateDetails `json:"PricingExchangeRate,omitempty"`
+	// The exchange rate between the document currency and the payment currency.
+	PaymentExchangeRate []ExchangeRateDetails `json:"PaymentExchangeRate,omitempty"`
+	// The exchange rate between the document currency and the payment alternative currency.
+	PaymentAlternativeExchangeRate []ExchangeRateDetails `json:"PaymentAlternativeExchangeRate,omitempty"`
+	// The total amount of a specific type of tax.
+	TaxTotal []TaxTotalDetails `json:"TaxTotal,omitempty"`
+	// The total withholding tax.
+	WithholdingTaxTotal []TaxTotalDetails `json:"WithholdingTaxTotal,omitempty"`
+	// The total amount payable on the Invoice, including Allowances, Charges, and Taxes.
+	LegalMonetaryTotal []MonetaryTotalDetails `json:"LegalMonetaryTotal"`
+	// A line describing an invoice item.
+	InvoiceLine []InvoiceLineDetails `json:"InvoiceLine"`
+}
+
+// A document used to request payment.
+type InvoiceDetails2 struct {
 	// The buyer's accounting code, applied to the Invoice as a whole, expressed as text.
 	AccountingCost []TextType `json:"AccountingCost,omitempty"`
 	// The buyer's accounting code, applied to the Invoice as a whole.
@@ -91,7 +206,7 @@ type InvoiceDetails struct {
 	// A discount or charge that applies to a price component.
 	AllowanceCharge []AllowanceChargeDetails `json:"AllowanceCharge,omitempty"`
 	// A reference to a billing document associated with this document.
-	BillingReference []BillingReferenceDetails `json:"BillingReference,omitempty"`
+	BillingReference []BillingReferenceDetails `json:"BillingReference"`
 	// The buyer.
 	BuyerCustomerParty []CustomerPartyDetails `json:"BuyerCustomerParty,omitempty"`
 	// A reference provided by the buyer used for internal routing of the document.
@@ -109,7 +224,7 @@ type InvoiceDetails struct {
 	// A reference to a Despatch Advice associated with this document.
 	DespatchDocumentReference []DocumentReferenceDetails `json:"DespatchDocumentReference,omitempty"`
 	// A code signifying the default currency for this document.
-	DocumentCurrencyCode []CodeType `json:"DocumentCurrencyCode,omitempty"`
+	DocumentCurrencyCode []CodeType `json:"DocumentCurrencyCode"`
 	// The date on which Invoice is due.
 	DueDate []DateType `json:"DueDate,omitempty"`
 	// An identifier for this document, assigned by the sender.
@@ -119,11 +234,11 @@ type InvoiceDetails struct {
 	// A period to which the Invoice applies.
 	InvoicePeriod []PeriodDetails `json:"InvoicePeriod,omitempty"`
 	// A code signifying the type of the Invoice.
-	InvoiceTypeCode []CodeType `json:"InvoiceTypeCode,omitempty"`
+	InvoiceTypeCode []CodeType `json:"InvoiceTypeCode"`
 	// The date, assigned by the sender, on which this document was issued.
 	IssueDate []DateType `json:"IssueDate"`
 	// The time, assigned by the sender, at which this document was issued.
-	IssueTime []TimeType `json:"IssueTime,omitempty"`
+	IssueTime []TimeType `json:"IssueTime"`
 	// The total amount payable on the Invoice, including Allowances, Charges, and Taxes.
 	LegalMonetaryTotal []MonetaryTotalDetails `json:"LegalMonetaryTotal"`
 	// The number of lines in the document.

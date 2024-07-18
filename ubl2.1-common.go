@@ -9,9 +9,9 @@ package myinvois
 // A character string that constitutes the distinctive designation of a person, place, thing
 // or concept.
 type TextType struct {
-	Empty            string  `json:"_"`
-	LanguageID       *string `json:"languageID,omitempty"`
-	LanguageLocaleID *string `json:"languageLocaleID,omitempty"`
+	Empty            string `json:"_"`
+	LanguageID       string `json:"languageID,omitempty"`
+	LanguageLocaleID string `json:"languageLocaleID,omitempty"`
 }
 
 // A character string (letters, figures, or symbols) that for brevity and/or language
@@ -22,55 +22,55 @@ type TextType struct {
 // independence may be used to represent or replace a definitive value or text of an
 // attribute together with relevant supplementary information.
 type CodeType struct {
-	Empty          string  `json:"_"`
-	LanguageID     *string `json:"languageID,omitempty"`
-	ListAgencyID   *string `json:"listAgencyID,omitempty"`
-	ListAgencyName *string `json:"listAgencyName,omitempty"`
-	ListID         *string `json:"listID,omitempty"`
-	ListName       *string `json:"listName,omitempty"`
-	ListSchemeURI  *string `json:"listSchemeURI,omitempty"`
-	ListURI        *string `json:"listURI,omitempty"`
-	ListVersionID  *string `json:"listVersionID,omitempty"`
-	Name           *string `json:"name,omitempty"`
+	Empty          string `json:"_"`
+	ListID         string `json:"listID,omitempty"`
+	ListAgencyID   string `json:"listAgencyID,omitempty"`
+	ListAgencyName string `json:"listAgencyName,omitempty"`
+	ListName       string `json:"listName,omitempty"`
+	ListVersionID  string `json:"listVersionID,omitempty"`
+	Name           string `json:"name,omitempty"`
+	LanguageID     string `json:"languageID,omitempty"`
+	ListURI        string `json:"listURI,omitempty"`
+	ListSchemeURI  string `json:"listSchemeURI,omitempty"`
 }
 
 // A class to describe a customer party.
 type CustomerPartyDetails struct {
-	// A customer contact for accounting.
-	AccountingContact []ContactDetails `json:"AccountingContact,omitempty"`
-	// An identifier for the customer's account, assigned by a third party.
-	AdditionalAccountID []IdentifierType `json:"AdditionalAccountID,omitempty"`
-	// A customer contact for purchasing.
-	BuyerContact []ContactDetails `json:"BuyerContact,omitempty"`
 	// An identifier for the customer's account, assigned by the customer itself.
 	CustomerAssignedAccountID []IdentifierType `json:"CustomerAssignedAccountID,omitempty"`
-	// A customer contact for deliveries.
-	DeliveryContact []ContactDetails `json:"DeliveryContact,omitempty"`
-	// The customer party itself.
-	Party []PartyDetails `json:"Party,omitempty"`
 	// An identifier for the customer's account, assigned by the supplier.
 	SupplierAssignedAccountID []IdentifierType `json:"SupplierAssignedAccountID,omitempty"`
+	// An identifier for the customer's account, assigned by a third party.
+	AdditionalAccountID []IdentifierType `json:"AdditionalAccountID,omitempty"`
+	// The customer party itself.
+	Party []PartyDetails `json:"Party,omitempty"`
+	// A customer contact for deliveries.
+	DeliveryContact []ContactDetails `json:"DeliveryContact,omitempty"`
+	// A customer contact for accounting.
+	AccountingContact []ContactDetails `json:"AccountingContact,omitempty"`
+	// A customer contact for purchasing.
+	BuyerContact []ContactDetails `json:"BuyerContact,omitempty"`
 }
 
 // A class to describe a contactable person or department in an organization.
 type ContactDetails struct {
-	// The primary email address of this contact.
-	ElectronicMail []TextType `json:"ElectronicMail,omitempty"`
 	// An identifier for this contact.
 	ID []IdentifierType `json:"ID,omitempty"`
 	// The name of this contact. It is recommended that this be used for a functional name and
 	// not a personal name.
 	Name []TextType `json:"Name,omitempty"`
+	// The primary telephone number of this contact.
+	Telephone []TextType `json:"Telephone,omitempty"`
+	// The primary fax number of this contact.
+	Telefax []TextType `json:"Telefax,omitempty"`
+	// The primary email address of this contact.
+	ElectronicMail []TextType `json:"ElectronicMail,omitempty"`
 	// Free-form text conveying information that is not contained explicitly in other
 	// structures; in particular, a textual description of the circumstances under which this
 	// contact can be used (e.g., "emergency" or "after hours").
 	Note []TextType `json:"Note,omitempty"`
 	// Another means of communication with this contact.
 	OtherCommunication []CommunicationDetails `json:"OtherCommunication,omitempty"`
-	// The primary fax number of this contact.
-	Telefax []TextType `json:"Telefax,omitempty"`
-	// The primary telephone number of this contact.
-	Telephone []TextType `json:"Telephone,omitempty"`
 }
 
 // A character string to identify and uniquely distinguish one instance of an object in an
@@ -81,14 +81,14 @@ type ContactDetails struct {
 // identification scheme from all other objects in the same scheme together with relevant
 // supplementary information.
 type IdentifierType struct {
-	Empty            string  `json:"_"`
-	SchemeAgencyID   *string `json:"schemeAgencyID,omitempty"`
-	SchemeAgencyName *string `json:"schemeAgencyName,omitempty"`
-	SchemeDataURI    *string `json:"schemeDataURI,omitempty"`
-	SchemeID         *string `json:"schemeID,omitempty"`
-	SchemeName       *string `json:"schemeName,omitempty"`
-	SchemeURI        *string `json:"schemeURI,omitempty"`
-	SchemeVersionID  *string `json:"schemeVersionID,omitempty"`
+	Empty            string `json:"_"`
+	SchemeAgencyID   string `json:"schemeAgencyID,omitempty"`
+	SchemeAgencyName string `json:"schemeAgencyName,omitempty"`
+	SchemeDataURI    string `json:"schemeDataURI,omitempty"`
+	SchemeID         string `json:"schemeID,omitempty"`
+	SchemeName       string `json:"schemeName,omitempty"`
+	SchemeURI        string `json:"schemeURI,omitempty"`
+	SchemeVersionID  string `json:"schemeVersionID,omitempty"`
 }
 
 // A class to describe a means of communication.
@@ -284,45 +284,45 @@ type PartyLegalEntityDetails struct {
 // A class to describe an organization, sub-organization, or individual fulfilling a role in
 // a business process.
 type PartyDetails struct {
-	// A party who acts as an agent for this party.
-	AgentParty []PartyDetails `json:"AgentParty,omitempty"`
-	// The primary contact for this party.
-	Contact []ContactDetails `json:"Contact,omitempty"`
-	// An identifier for the end point of the routing service (e.g., EAN Location Number, GLN).
-	EndpointID []IdentifierType `json:"EndpointID,omitempty"`
-	// The financial account associated with this party.
-	FinancialAccount []FinancialAccountDetails `json:"FinancialAccount,omitempty"`
-	// This party's Industry Classification Code.
-	IndustryClassificationCode []CodeType `json:"IndustryClassificationCode,omitempty"`
-	// The language associated with this party.
-	Language []LanguageDetails `json:"Language,omitempty"`
-	// An identifier for this party's logo.
-	LogoReferenceID []IdentifierType `json:"LogoReferenceID,omitempty"`
-	// An indicator that this party is "for the attention of" (FAO) (true) or not (false).
-	MarkAttentionIndicator []IndicatorType `json:"MarkAttentionIndicator,omitempty"`
 	// An indicator that this party is "care of" (c/o) (true) or not (false).
 	MarkCareIndicator []IndicatorType `json:"MarkCareIndicator,omitempty"`
-	// An identifier for this party.
-	PartyIdentification []PartyIdentificationDetails `json:"PartyIdentification,omitempty"`
-	// A description of this party as a legal entity.
-	PartyLegalEntity []PartyLegalEntityDetails `json:"PartyLegalEntity,omitempty"`
-	// A name for this party.
-	PartyName []PartyNameDetails `json:"PartyName,omitempty"`
-	// A tax scheme applying to this party.
-	PartyTaxScheme []PartyTaxSchemeDetails `json:"PartyTaxScheme,omitempty"`
-	// A person associated with this party.
-	Person []PersonDetails `json:"Person,omitempty"`
-	// The physical location of this party.
-	PhysicalLocation []LocationDetails `json:"PhysicalLocation,omitempty"`
-	// The party's postal address.
-	PostalAddress []AddressDetails `json:"PostalAddress,omitempty"`
-	// A power of attorney associated with this party.
-	PowerOfAttorney []PowerOfAttorneyDetails `json:"PowerOfAttorney,omitempty"`
-	// A party providing a service to this party.
-	ServiceProviderParty []ServiceProviderPartyDetails `json:"ServiceProviderParty,omitempty"`
+	// An indicator that this party is "for the attention of" (FAO) (true) or not (false).
+	MarkAttentionIndicator []IndicatorType `json:"MarkAttentionIndicator,omitempty"`
 	// The Uniform Resource Identifier (URI) that identifies this party's web site; i.e., the
 	// web site's Uniform Resource Locator (URL).
 	WebsiteURI []IdentifierType `json:"WebsiteURI,omitempty"`
+	// An identifier for this party's logo.
+	LogoReferenceID []IdentifierType `json:"LogoReferenceID,omitempty"`
+	// An identifier for the end point of the routing service (e.g., EAN Location Number, GLN).
+	EndpointID []IdentifierType `json:"EndpointID,omitempty"`
+	// This party's Industry Classification Code.
+	IndustryClassificationCode []CodeType `json:"IndustryClassificationCode,omitempty"`
+	// An identifier for this party.
+	PartyIdentification []PartyIdentificationDetails `json:"PartyIdentification,omitempty"`
+	// A name for this party.
+	PartyName []PartyNameDetails `json:"PartyName,omitempty"`
+	// The language associated with this party.
+	Language []LanguageDetails `json:"Language,omitempty"`
+	// The party's postal address.
+	PostalAddress []AddressDetails `json:"PostalAddress,omitempty"`
+	// The physical location of this party.
+	PhysicalLocation []LocationDetails `json:"PhysicalLocation,omitempty"`
+	// A tax scheme applying to this party.
+	PartyTaxScheme []PartyTaxSchemeDetails `json:"PartyTaxScheme,omitempty"`
+	// A description of this party as a legal entity.
+	PartyLegalEntity []PartyLegalEntityDetails `json:"PartyLegalEntity,omitempty"`
+	// The primary contact for this party.
+	Contact []ContactDetails `json:"Contact,omitempty"`
+	// A person associated with this party.
+	Person []PersonDetails `json:"Person,omitempty"`
+	// A party who acts as an agent for this party.
+	AgentParty []PartyDetails `json:"AgentParty,omitempty"`
+	// A party providing a service to this party.
+	ServiceProviderParty []ServiceProviderPartyDetails `json:"ServiceProviderParty,omitempty"`
+	// A power of attorney associated with this party.
+	PowerOfAttorney []PowerOfAttorneyDetails `json:"PowerOfAttorney,omitempty"`
+	// The financial account associated with this party.
+	FinancialAccount []FinancialAccountDetails `json:"FinancialAccount,omitempty"`
 }
 
 // One calendar day according the Gregorian calendar.
@@ -346,13 +346,13 @@ type AttachmentDetails struct {
 
 // A set of finite-length sequences of binary octets.
 type BinaryObjectType struct {
-	Empty            string  `json:"_"`
-	CharacterSetCode *string `json:"characterSetCode,omitempty"`
-	EncodingCode     *string `json:"encodingCode,omitempty"`
-	Filename         *string `json:"filename,omitempty"`
-	Format           *string `json:"format,omitempty"`
-	MIMECode         string  `json:"mimeCode"`
-	URI              *string `json:"uri,omitempty"`
+	Empty            string `json:"_"`
+	CharacterSetCode string `json:"characterSetCode,omitempty"`
+	EncodingCode     string `json:"encodingCode,omitempty"`
+	Filename         string `json:"filename,omitempty"`
+	Format           string `json:"format,omitempty"`
+	MIMECode         string `json:"mimeCode"`
+	URI              string `json:"uri,omitempty"`
 }
 
 // A class to describe an external object, such as a document stored at a remote location.
@@ -390,27 +390,27 @@ type IndicatorType struct {
 
 // A class to describe a period of time.
 type PeriodDetails struct {
+	// The date on which this period begins.
+	StartDate []DateType `json:"StartDate,omitempty"`
+	// The time at which this period begins.
+	StartTime []TimeType `json:"StartTime,omitempty"`
+	// The date on which this period ends.
+	EndDate []DateType `json:"EndDate,omitempty"`
+	// The time at which this period ends.
+	EndTime []TimeType `json:"EndTime,omitempty"`
 	// A description of this period, expressed as text.
 	Description []TextType `json:"Description,omitempty"`
 	// A description of this period, expressed as a code.
 	DescriptionCode []CodeType `json:"DescriptionCode,omitempty"`
 	// The duration of this period, expressed as an ISO 8601 code.
 	DurationMeasure []MeasureType `json:"DurationMeasure,omitempty"`
-	// The date on which this period ends.
-	EndDate []DateType `json:"EndDate,omitempty"`
-	// The time at which this period ends.
-	EndTime []TimeType `json:"EndTime,omitempty"`
-	// The date on which this period begins.
-	StartDate []DateType `json:"StartDate,omitempty"`
-	// The time at which this period begins.
-	StartTime []TimeType `json:"StartTime,omitempty"`
 }
 
 // A numeric value determined by measuring an object using a specified unit of measure.
 type MeasureType struct {
 	Empty                 float64 `json:"_"`
 	UnitCode              string  `json:"unitCode"`
-	UnitCodeListVersionID *string `json:"unitCodeListVersionID,omitempty"`
+	UnitCodeListVersionID string  `json:"unitCodeListVersionID,omitempty"`
 }
 
 // A class to describe a financial account.
@@ -458,14 +458,23 @@ type BranchDetails struct {
 
 // A class to define common information related to an address.
 type AddressDetails struct {
-	// An additional street name used to further clarify the address.
-	AdditionalStreetName []TextType `json:"AdditionalStreetName,omitempty"`
-	// A mutually agreed code signifying the format of this address.
-	AddressFormatCode []CodeType `json:"AddressFormatCode,omitempty"`
-	// An unstructured address line.
-	AddressLine []AddressLineDetails `json:"AddressLine,omitempty"`
+	// An identifier for this address within an agreed scheme of address identifiers.
+	ID []IdentifierType `json:"ID,omitempty"`
 	// A mutually agreed code signifying the type of this address.
 	AddressTypeCode []CodeType `json:"AddressTypeCode,omitempty"`
+	// A mutually agreed code signifying the format of this address.
+	AddressFormatCode []CodeType `json:"AddressFormatCode,omitempty"`
+	// A post office box number registered for postal delivery by a postal service provider.
+	Postbox []TextType `json:"Postbox,omitempty"`
+	// An identifiable floor of a building.
+	Floor []TextType `json:"Floor,omitempty"`
+	// An identifiable room, suite, or apartment of a building.
+	Room []TextType `json:"Room,omitempty"`
+	// The name of the street, road, avenue, way, etc. to which the number of the building is
+	// attached.
+	StreetName []TextType `json:"StreetName,omitempty"`
+	// An additional street name used to further clarify the address.
+	AdditionalStreetName []TextType `json:"AdditionalStreetName,omitempty"`
 	// The name of the block (an area surrounded by streets and usually containing several
 	// buildings) in which this address is located.
 	BlockName []TextType `json:"BlockName,omitempty"`
@@ -473,32 +482,10 @@ type AddressDetails struct {
 	BuildingName []TextType `json:"BuildingName,omitempty"`
 	// The number of a building within the street.
 	BuildingNumber []TextType `json:"BuildingNumber,omitempty"`
-	// The name of a city, town, or village.
-	CityName []TextType `json:"CityName,omitempty"`
-	// The name of the subdivision of a city, town, or village in which this address is located,
-	// such as the name of its district or borough.
-	CitySubdivisionName []TextType `json:"CitySubdivisionName,omitempty"`
-	// The country in which this address is situated.
-	Country []CountryDetails `json:"Country,omitempty"`
-	// The political or administrative division of a country in which this address is located,
-	// such as the name of its county, province, or state, expressed as text.
-	CountrySubentity []TextType `json:"CountrySubentity,omitempty"`
-	// The political or administrative division of a country in which this address is located,
-	// such as a county, province, or state, expressed as a code (typically nationally agreed).
-	CountrySubentityCode []CodeType `json:"CountrySubentityCode,omitempty"`
-	// The department of the addressee.
-	Department []TextType `json:"Department,omitempty"`
-	// The district or geographical division of a country or region in which this address is
-	// located.
-	District []TextType `json:"District,omitempty"`
-	// An identifiable floor of a building.
-	Floor []TextType `json:"Floor,omitempty"`
-	// An identifier for this address within an agreed scheme of address identifiers.
-	ID []IdentifierType `json:"ID,omitempty"`
 	// The specific identifable location within a building where mail is delivered.
 	InhouseMail []TextType `json:"InhouseMail,omitempty"`
-	// The geographical coordinates of this address.
-	LocationCoordinate []LocationCoordinateDetails `json:"LocationCoordinate,omitempty"`
+	// The department of the addressee.
+	Department []TextType `json:"Department,omitempty"`
 	// The name, expressed as text, of a person or department in an organization to whose
 	// attention incoming mail is directed; corresponds to the printed forms "for the attention
 	// of", "FAO", and ATTN:".
@@ -508,22 +495,35 @@ type AddressDetails struct {
 	MarkCare []TextType `json:"MarkCare,omitempty"`
 	// An identifier (e.g., a parcel number) for the piece of land associated with this address.
 	PlotIdentification []TextType `json:"PlotIdentification,omitempty"`
+	// The name of the subdivision of a city, town, or village in which this address is located,
+	// such as the name of its district or borough.
+	CitySubdivisionName []TextType `json:"CitySubdivisionName,omitempty"`
+	// The name of a city, town, or village.
+	CityName []TextType `json:"CityName,omitempty"`
 	// The postal identifier for this address according to the relevant national postal service,
 	// such as a ZIP code or Post Code.
 	PostalZone []TextType `json:"PostalZone,omitempty"`
-	// A post office box number registered for postal delivery by a postal service provider.
-	Postbox []TextType `json:"Postbox,omitempty"`
+	// The political or administrative division of a country in which this address is located,
+	// such as the name of its county, province, or state, expressed as text.
+	CountrySubentity []TextType `json:"CountrySubentity,omitempty"`
+	// The political or administrative division of a country in which this address is located,
+	// such as a county, province, or state, expressed as a code (typically nationally agreed).
+	CountrySubentityCode []CodeType `json:"CountrySubentityCode,omitempty"`
 	// The recognized geographic or economic region or group of countries in which this address
 	// is located.
 	Region []TextType `json:"Region,omitempty"`
-	// An identifiable room, suite, or apartment of a building.
-	Room []TextType `json:"Room,omitempty"`
-	// The name of the street, road, avenue, way, etc. to which the number of the building is
-	// attached.
-	StreetName []TextType `json:"StreetName,omitempty"`
+	// The district or geographical division of a country or region in which this address is
+	// located.
+	District []TextType `json:"District,omitempty"`
 	// The time zone in which this address is located (as an offset from Universal Coordinated
 	// Time (UTC)) at the time of exchange.
 	TimezoneOffset []TextType `json:"TimezoneOffset,omitempty"`
+	// An unstructured address line.
+	AddressLine []AddressLineDetails `json:"AddressLine,omitempty"`
+	// The country in which this address is situated.
+	Country []CountryDetails `json:"Country,omitempty"`
+	// The geographical coordinates of this address.
+	LocationCoordinate []LocationCoordinateDetails `json:"LocationCoordinate,omitempty"`
 }
 
 // A class to define an unstructured address line.
@@ -575,7 +575,7 @@ type FinancialInstitutionDetails struct {
 // counting, or sequencing. It does not require a unit of quantity or unit of measure.
 type NumericType struct {
 	Empty  float64 `json:"_"`
-	Format *string `json:"format,omitempty"`
+	Format string  `json:"format,omitempty"`
 }
 
 // A class to describe a scheme for corporate registration.
@@ -593,7 +593,7 @@ type CorporateRegistrationSchemeDetails struct {
 // A number of monetary units specified using a given unit of currency.
 type AmountType struct {
 	Empty                     float64 `json:"_"`
-	CurrencyCodeListVersionID *string `json:"currencyCodeListVersionID,omitempty"`
+	CurrencyCodeListVersionID string  `json:"currencyCodeListVersionID,omitempty"`
 	CurrencyID                string  `json:"currencyID"`
 }
 
@@ -682,19 +682,19 @@ type LocationDetails struct {
 
 // A class to describe a supplier party.
 type SupplierPartyDetails struct {
-	// A contact at this supplier party for accounting.
-	AccountingContact []ContactDetails `json:"AccountingContact,omitempty"`
-	// An additional identifier for this supplier party.
-	AdditionalAccountID []IdentifierType `json:"AdditionalAccountID,omitempty"`
 	// An identifier for this supplier party, assigned by the customer.
 	CustomerAssignedAccountID []IdentifierType `json:"CustomerAssignedAccountID,omitempty"`
+	// An additional identifier for this supplier party.
+	AdditionalAccountID []IdentifierType `json:"AdditionalAccountID,omitempty"`
 	// Text describing the supplier's ability to send invoice data via a purchase card provider
 	// (e.g., VISA, MasterCard, American Express).
 	DataSendingCapability []TextType `json:"DataSendingCapability,omitempty"`
-	// A contact at this supplier party for despatches (pickups).
-	DespatchContact []ContactDetails `json:"DespatchContact,omitempty"`
 	// The supplier party itself.
 	Party []PartyDetails `json:"Party,omitempty"`
+	// A contact at this supplier party for despatches (pickups).
+	DespatchContact []ContactDetails `json:"DespatchContact,omitempty"`
+	// A contact at this supplier party for accounting.
+	AccountingContact []ContactDetails `json:"AccountingContact,omitempty"`
 	// The primary contact for this supplier party.
 	SellerContact []ContactDetails `json:"SellerContact,omitempty"`
 }
@@ -1036,10 +1036,10 @@ type CreditNoteLineDetails struct {
 // A counted number of non-monetary units possibly including fractions.
 type QuantityType struct {
 	Empty                  float64 `json:"_"`
-	UnitCode               *string `json:"unitCode,omitempty"`
-	UnitCodeListAgencyID   *string `json:"unitCodeListAgencyID,omitempty"`
-	UnitCodeListAgencyName *string `json:"unitCodeListAgencyName,omitempty"`
-	UnitCodeListID         *string `json:"unitCodeListID,omitempty"`
+	UnitCode               string  `json:"unitCode,omitempty"`
+	UnitCodeListAgencyID   string  `json:"unitCodeListAgencyID,omitempty"`
+	UnitCodeListAgencyName string  `json:"unitCodeListAgencyName,omitempty"`
+	UnitCodeListID         string  `json:"unitCodeListID,omitempty"`
 }
 
 // A class to define a line in a Receipt Advice.
@@ -3194,6 +3194,8 @@ type UBLExtensions struct {
 
 // A single extension for private use.
 type UBLExtension struct {
+	// A URI for the Extension.
+	ExtensionURI []IdentifierType `json:"ExtensionURI,omitempty"`
 	// An agency that maintains one or more Extensions.
 	ExtensionAgencyID []IdentifierType `json:"ExtensionAgencyID,omitempty"`
 	// The name of the agency that maintains the Extension.
@@ -3206,12 +3208,97 @@ type UBLExtension struct {
 	ExtensionReason []TextType `json:"ExtensionReason,omitempty"`
 	// A code for reason the Extension is being included.
 	ExtensionReasonCode []CodeType `json:"ExtensionReasonCode,omitempty"`
-	// A URI for the Extension.
-	ExtensionURI []IdentifierType `json:"ExtensionURI,omitempty"`
 	// The version of the Extension.
 	ExtensionVersionID []IdentifierType `json:"ExtensionVersionID,omitempty"`
 	// An identifier for the Extension assigned by the creator of the extension.
 	ID []IdentifierType `json:"ID,omitempty"`
 	// A name for the Extension assigned by the creator of the extension.
 	Name []TextType `json:"Name,omitempty"`
+}
+
+type UBLDocumentSignatures struct {
+	UBLDocumentSignatures []UBLDocumentSignature `json:"UBLDocumentSignatures"`
+}
+
+type UBLDocumentSignature struct {
+	SignatureInformation []SignatureInformation `json:"SignatureInformation"`
+}
+
+type SignatureInformation struct {
+	ID                    []IdentifierType `json:"ID"`
+	ReferencedSignatureID []IdentifierType `json:"ReferencedSignatureID"`
+	Signature             []Signature      `json:"Signature"`
+}
+
+type Signature struct {
+	ID             string           `json:"Id"`
+	Object         []Object         `json:"Object"`
+	KeyInfo        []KeyInfo        `json:"KeyInfo"`
+	SignatureValue []IdentifierType `json:"SignatureValue"`
+	SignedInfo     []SignedInfo     `json:"SignedInfo"`
+}
+
+type KeyInfo struct {
+	X509Data []X509Datum `json:"X509Data"`
+}
+
+type X509Datum struct {
+	X509Certificate  []IdentifierType `json:"X509Certificate"`
+	X509SubjectName  []IdentifierType `json:"X509SubjectName"`
+	X509IssuerSerial []IssuerSerial   `json:"X509IssuerSerial"`
+}
+
+type IssuerSerial struct {
+	X509IssuerName   []IdentifierType `json:"X509IssuerName"`
+	X509SerialNumber []IdentifierType `json:"X509SerialNumber"`
+}
+
+type Object struct {
+	QualifyingProperties []QualifyingProperty `json:"QualifyingProperties"`
+}
+
+type QualifyingProperty struct {
+	Target           string           `json:"Target"`
+	SignedProperties []SignedProperty `json:"SignedProperties"`
+}
+
+type SignedProperty struct {
+	ID                        string                    `json:"Id"`
+	SignedSignatureProperties []SignedSignatureProperty `json:"SignedSignatureProperties"`
+}
+
+type SignedSignatureProperty struct {
+	SigningTime        []IdentifierType     `json:"SigningTime"`
+	SigningCertificate []SigningCertificate `json:"SigningCertificate"`
+}
+
+type SigningCertificate struct {
+	Cert []Cert `json:"Cert"`
+}
+
+type Cert struct {
+	CertDigest   []CertDigest   `json:"CertDigest"`
+	IssuerSerial []IssuerSerial `json:"IssuerSerial"`
+}
+
+type CertDigest struct {
+	DigestMethod []Method         `json:"DigestMethod"`
+	DigestValue  []IdentifierType `json:"DigestValue"`
+}
+
+type Method struct {
+	Empty     string `json:"_"`
+	Algorithm string `json:"Algorithm"`
+}
+
+type SignedInfo struct {
+	SignatureMethod []Method    `json:"SignatureMethod"`
+	Reference       []Reference `json:"Reference"`
+}
+
+type Reference struct {
+	Type         string           `json:"Type"`
+	URI          string           `json:"URI"`
+	DigestMethod []Method         `json:"DigestMethod"`
+	DigestValue  []IdentifierType `json:"DigestValue"`
 }
