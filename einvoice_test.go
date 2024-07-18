@@ -238,7 +238,7 @@ func TestSubmitInvalidDocuments(t *testing.T) {
 	assert.NotNil(res)
 	if res != nil {
 		assert.Equal(0, len(res.AcceptedDocuments))
-		assert.Greater(0, len(res.RejectedDocuments))
+		assert.Greater(len(res.RejectedDocuments), 0)
 	}
 
 	if res != nil {
