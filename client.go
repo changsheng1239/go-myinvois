@@ -1,6 +1,10 @@
 package myinvois
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -20,15 +24,18 @@ const (
 type Environment string
 
 type Client struct {
-	Endpoint   *url.URL
-	httpClient *http.Client
 	PlatformAPI
 	EInvoiceAPI
 }
 
 type Option struct {
-	Environment Environment
-	Timeout     time.Duration
+	Environment  Environment
+	Timeout      time.Duration
+	ClientID     string
+	ClientSecret string
+	Cert         []byte
+	PrivKey      []byte
+	PrivKeyPass  []byte
 }
 
 func newClient(opt Option) *Client {
@@ -40,19 +47,52 @@ func newClient(opt Option) *Client {
 	}
 	u, _ := url.Parse(apiURL)
 	httpClient := &http.Client{Timeout: opt.Timeout}
-	c := &Client{
-		Endpoint:   u,
-		httpClient: httpClient,
+
+	certWrapper, err := NewCertWrapper(opt.Cert)
+	if err != nil {
+		log.Fatalf("NewCertWrapper failed: %v", err)
 	}
-	c.PlatformAPI = NewPlatformClient(c)
-	c.EInvoiceAPI = NewEInvoiceClient(c)
+
+	c := &Client{
+		PlatformAPI: NewPlatformClient(u, httpClient, opt.ClientID, opt.ClientSecret),
+		EInvoiceAPI: NewEInvoiceClient(u, httpClient, *certWrapper, MustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
+	}
 	return c
 }
 
-func SandboxClient() *Client {
-	return newClient(Option{Environment: Sandbox, Timeout: DefaultTimeout})
+func SandboxClient(clientID, clientSecret string, cert, pk, pkPass []byte) *Client {
+	return newClient(Option{
+		Environment:  Sandbox,
+		Timeout:      DefaultTimeout,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Cert:         cert,
+		PrivKey:      pk,
+		PrivKeyPass:  pkPass,
+	})
 }
 
-func ProductionClient() *Client {
-	return newClient(Option{Environment: Production, Timeout: DefaultTimeout})
+func ProductionClient(clientID, clientSecret string, cert, pk, pkPass []byte) *Client {
+	return newClient(Option{
+		Environment:  Production,
+		Timeout:      DefaultTimeout,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Cert:         cert,
+		PrivKey:      pk,
+		PrivKeyPass:  pkPass,
+	})
+}
+
+func MustParsePrivateKey(privKey, passphrase []byte) *rsa.PrivateKey {
+	block, _ := pem.Decode(privKey)
+	der, err := x509.DecryptPEMBlock(block, passphrase)
+	if err != nil {
+		log.Fatalf("Decrypt failed: %v", err)
+	}
+	key, err := x509.ParsePKCS1PrivateKey(der)
+	if err != nil {
+		log.Fatalf("ParsePKCS1PrivateKey failed: %v", err)
+	}
+	return key
 }

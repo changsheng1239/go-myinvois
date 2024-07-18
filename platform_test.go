@@ -1,6 +1,7 @@
 package myinvois
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -8,24 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var PlatformAPIClient = NewPlatformClient(SandboxClient())
-var clientID = ""
-var clientSecret = ""
-
-func setup() {
+func setupPlatformTest() *Client {
 	err := godotenv.Load(".env")
 	if err != nil {
 		panic(err)
 	}
 
-	clientID = os.Getenv("CLIENT_ID")
-	clientSecret = os.Getenv("CLIENT_SECRET")
-}
+	cert, err := os.ReadFile(os.Getenv("CERT_PATH"))
+	if err != nil {
+		panic(err)
+	}
+	key, err := os.ReadFile(os.Getenv("PKEY_PATH"))
+	if err != nil {
+		panic(err)
+	}
 
-func TestMain(m *testing.M) {
-	setup()
-	code := m.Run()
-	os.Exit(code)
+	return SandboxClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), cert, key, []byte(os.Getenv("PKEY_PASSWORD")))
 }
 
 func TestDecodeToken(t *testing.T) {
@@ -58,9 +57,10 @@ func TestDecodeToken(t *testing.T) {
 }
 
 func TestLoginAsTaxpayer(t *testing.T) {
+	p := setupPlatformTest()
 	assert := assert.New(t)
 
-	token, err := PlatformAPIClient.LoginAsTaxpayer(clientID, clientSecret)
+	token, err := p.LoginAsTaxpayer()
 	assert.Nil(err)
 	assert.NotEmpty(token.AccessToken)
 	assert.Equal("Bearer", token.TokenType)
@@ -68,26 +68,47 @@ func TestLoginAsTaxpayer(t *testing.T) {
 	assert.Equal(3600, token.ExpiresIn)
 }
 
-func TestGetAllDocumentTypes(t *testing.T) {
+func TestLoginAsIntermediary(t *testing.T) {
+	p := setupPlatformTest()
 	assert := assert.New(t)
 
-	token, err := PlatformAPIClient.LoginAsTaxpayer(clientID, clientSecret)
+	token, err := p.LoginAsIntermediaries(os.Getenv("TIN"))
+	assert.Nil(err)
+	assert.NotEmpty(token.AccessToken)
+	assert.Equal("Bearer", token.TokenType)
+	assert.Equal(defaultScope, token.Scope)
+	assert.Equal(3600, token.ExpiresIn)
+
+	payload, err := DecodeToken(token.AccessToken)
+	assert.Nil(err)
+	b, err := json.MarshalIndent(payload, "", "  ")
+	assert.Nil(err)
+	t.Log(string(b))
+
+}
+
+func TestGetAllDocumentTypes(t *testing.T) {
+	p := setupPlatformTest()
+	assert := assert.New(t)
+
+	token, err := p.LoginAsTaxpayer()
 	assert.Nil(err)
 	assert.NotEmpty(token.AccessToken)
 
-	documentTypes, err := PlatformAPIClient.GetAllDocumentTypes(token.AccessToken)
+	documentTypes, err := p.GetAllDocumentTypes(token.AccessToken)
 	assert.Nil(err)
 	assert.NotEmpty(documentTypes.Result)
 }
 
 func TestGetDocumentType(t *testing.T) {
+	p := setupPlatformTest()
 	assert := assert.New(t)
 
-	token, err := PlatformAPIClient.LoginAsTaxpayer(clientID, clientSecret)
+	token, err := p.LoginAsTaxpayer()
 	assert.Nil(err)
 	assert.NotEmpty(token.AccessToken)
 
-	documentType, err := PlatformAPIClient.GetDocumentType(token.AccessToken, 1)
+	documentType, err := p.GetDocumentType(token.AccessToken, 1)
 	assert.Nil(err)
 	assert.NotEmpty(documentType)
 	assert.Equal(int64(1), documentType.ID)
