@@ -11,15 +11,6 @@ import (
 	"time"
 )
 
-//	type PlatformAPI interface {
-//		LoginAsTaxpayer()
-//		LoginAsIntermediary()
-//		GetAllDocumentTypes()
-//		GetDocumentType()
-//		GetDocumentTypeVersion()
-//		GetNotifications()
-//	}
-
 var (
 	ErrInvalidTokenStructure = errors.New("invalid token structure")
 	ErrNewHttpRequestFailed  = errors.New("failed to create new http request")
