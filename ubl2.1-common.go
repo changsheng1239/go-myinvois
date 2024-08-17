@@ -297,9 +297,9 @@ type PartyDetails struct {
 	EndpointID []IdentifierType `json:"EndpointID,omitempty"`
 	// This party's Industry Classification Code.
 	IndustryClassificationCode []CodeType `json:"IndustryClassificationCode,omitempty"`
-	// An identifier for this party.
+	// A description of this party as a legal entity.
 	PartyIdentification []PartyIdentificationDetails `json:"PartyIdentification,omitempty"`
-	// A name for this party.
+	// The primary contact for this party.
 	PartyName []PartyNameDetails `json:"PartyName,omitempty"`
 	// The language associated with this party.
 	Language []LanguageDetails `json:"Language,omitempty"`
@@ -309,9 +309,9 @@ type PartyDetails struct {
 	PhysicalLocation []LocationDetails `json:"PhysicalLocation,omitempty"`
 	// A tax scheme applying to this party.
 	PartyTaxScheme []PartyTaxSchemeDetails `json:"PartyTaxScheme,omitempty"`
-	// A description of this party as a legal entity.
+	// An identifier for this party.
 	PartyLegalEntity []PartyLegalEntityDetails `json:"PartyLegalEntity,omitempty"`
-	// The primary contact for this party.
+	// A name for this party.
 	Contact []ContactDetails `json:"Contact,omitempty"`
 	// A person associated with this party.
 	Person []PersonDetails `json:"Person,omitempty"`

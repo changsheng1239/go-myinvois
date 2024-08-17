@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -179,14 +180,17 @@ type GetDocumentsOption struct {
 }
 
 const (
+	stDocumentPending   = "Pending"
+	stDocumentSubmitted = "Submitted"
 	stDocumentValid     = "Valid"
+	stDocumentInvalid   = "Invalid"
 	stDocumentCancelled = "Cancelled"
 	stDocumentRejected  = "Rejected"
 )
 
 // ValidateTaxpayerTIN validates the taxpayer TIN
 // api signature: GET /api/v1.0/taxpayer/validate/{tin}?idType={idType}&idValue={idValue}
-func (e *EInvoiceAPI) ValidateTaxpayerTIN(token, tin, idType, idValue string) (bool, error) {
+func (e *EInvoiceAPI) ValidateTaxpayerTIN(tin, idType, idValue string) (bool, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.validateTaxpayerTIN)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s", tin)
 
@@ -195,7 +199,7 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(token, tin, idType, idValue string) (b
 	q.Set("idValue", idValue)
 	endpoint.RawQuery = q.Encode()
 
-	req, err := newAuthenticatedRequest("GET", endpoint.String(), token, nil)
+	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -222,11 +226,15 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(token, tin, idType, idValue string) (b
 
 // SubmitDocuments submits documents to the LHDN MyInvois API with Digital Signature
 // api signature: POST /api/v1.0/documentsubmissions/
-func (e *EInvoiceAPI) SubmitDocuments(token string, docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
+func (e *EInvoiceAPI) SubmitDocuments(docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
 
 	var d DocumentSubmission
 	for _, doc := range docs {
+		if len(doc.Invoice) == 0 {
+			return nil, ErrInvalidInput
+		}
+
 		signedDoc, err := signDocument(e.privKey, doc, e.cert)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrSignFailed, err)
@@ -235,6 +243,8 @@ func (e *EInvoiceAPI) SubmitDocuments(token string, docs []Ubl21Invoice) (*Docum
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 		}
+
+		_ = os.WriteFile("response/signed.json", b, 0644)
 
 		h := sha256.New()
 		h.Write(b)
@@ -252,7 +262,7 @@ func (e *EInvoiceAPI) SubmitDocuments(token string, docs []Ubl21Invoice) (*Docum
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newAuthenticatedRequest("POST", endpoint.String(), token, bytes.NewReader(b))
+	req, err := newRequest("POST", endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -279,6 +289,8 @@ func (e *EInvoiceAPI) SubmitDocuments(token string, docs []Ubl21Invoice) (*Docum
 			return nil, ErrIncorrectSubmitter
 		} else if res.StatusCode == http.StatusUnprocessableEntity {
 			return nil, ErrDuplicateSubmission
+		} else {
+			return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
 		}
 	}
 
@@ -293,11 +305,11 @@ func (e *EInvoiceAPI) SubmitDocuments(token string, docs []Ubl21Invoice) (*Docum
 
 // GetDocumentDetails retrieves the status & details of a document
 // api signature: GET /api/v1.0/documents/{uuid}/details
-func (e *EInvoiceAPI) GetDocumentDetails(token string, uuid string) (*GetDocumentDetailsResponse, error) {
+func (e *EInvoiceAPI) GetDocumentDetails(uuid string) (*GetDocumentDetailsResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getDocuments)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s/details", uuid)
 
-	req, err := newAuthenticatedRequest("GET", endpoint.String(), token, nil)
+	req, err := newRequest("GET", endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -322,17 +334,17 @@ func (e *EInvoiceAPI) GetDocumentDetails(token string, uuid string) (*GetDocumen
 
 // CancelDocument cancels a document
 // api signature: PUT /api/v1.0/documents/state/{UUID}/state
-func (e *EInvoiceAPI) CancelDocument(token, uuid, reason string) (*UpdateStatusResponse, error) {
-	return e.updateDocumentStatus(token, uuid, stDocumentCancelled, reason)
+func (e *EInvoiceAPI) CancelDocument(uuid, reason string) (*UpdateStatusResponse, error) {
+	return e.updateDocumentStatus(uuid, stDocumentCancelled, reason)
 }
 
 // RejectDocument rejects a document
 // api signature: PUT /api/v1.0/documents/state/{UUID}/state
-func (e *EInvoiceAPI) RejectDocument(token, uuid, reason string) (*UpdateStatusResponse, error) {
-	return e.updateDocumentStatus(token, uuid, stDocumentRejected, reason)
+func (e *EInvoiceAPI) RejectDocument(uuid, reason string) (*UpdateStatusResponse, error) {
+	return e.updateDocumentStatus(uuid, stDocumentRejected, reason)
 }
 
-func (e *EInvoiceAPI) updateDocumentStatus(token, uuid, status, reason string) (*UpdateStatusResponse, error) {
+func (e *EInvoiceAPI) updateDocumentStatus(uuid, status, reason string) (*UpdateStatusResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.updateDocumentStatus(uuid))
 
 	body := UpdateStatusRequest{
@@ -344,7 +356,7 @@ func (e *EInvoiceAPI) updateDocumentStatus(token, uuid, status, reason string) (
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newAuthenticatedRequest("PUT", endpoint.String(), token, bytes.NewReader(b))
+	req, err := newRequest("PUT", endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -398,7 +410,7 @@ func (e *EInvoiceAPI) updateDocumentStatus(token, uuid, status, reason string) (
 //	issuerId={issuerId}&
 //	receiverTin={receiverTin}&
 //	issuerTin={issuerTin}
-func (e *EInvoiceAPI) GetRecentDocuments(token string, limit int) ([]GetDocumentDetailsResponse, error) {
+func (e *EInvoiceAPI) GetRecentDocuments(limit int) ([]GetDocumentDetailsResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getRecentDocuments)
 
 	q := endpoint.Query()
@@ -413,6 +425,8 @@ func signDocument(pkey *rsa.PrivateKey, iv Ubl21Invoice, cert x509CertWrapper) (
 	if err != nil {
 		return nil, err
 	}
+
+	_ = os.WriteFile("response/raw.json", docBytes, 0644)
 
 	docDigest := computeDigest(docBytes)
 	signedDocDigest, err := rsa.SignPKCS1v15(nil, pkey, crypto.SHA256, sha256Hash(docBytes))

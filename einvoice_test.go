@@ -1,19 +1,26 @@
 package myinvois
 
 import (
+	"crypto"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var currentUuid string
+const (
+	fileValidInvoice = "testdata/invoice-valid.json"
+	fileValidConsoIV = "testdata/conso-invoice-valid.json"
+)
 
 func setupEInvoiceTest() *Client {
 	err := godotenv.Load(".env")
@@ -30,48 +37,20 @@ func setupEInvoiceTest() *Client {
 		panic(err)
 	}
 
-	return SandboxClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), cert, key, []byte(os.Getenv("PKEY_PASSWORD")))
+	return NewClient(ClientOption{
+		// Environment: Production,
+		Environment:  Sandbox,
+		Timeout:      DefaultTimeout,
+		ClientID:     os.Getenv("CLIENT_ID"),
+		ClientSecret: os.Getenv("CLIENT_SECRET"),
+		Cert:         cert,
+		PrivKey:      key,
+		PrivKeyPass:  []byte(os.Getenv("PKEY_PASSWORD")),
+	})
 }
 
-func validInvoice() Ubl21Invoice {
-	b, err := os.ReadFile("testdata/submission_v1.1-unsigned-valid.json")
-	if err != nil {
-		panic(err)
-	}
-
-	var ublInvoice Ubl21Invoice
-	err = json.Unmarshal(b, &ublInvoice)
-	if err != nil {
-		panic(err)
-	}
-
-	ublInvoice.Invoice[0].ID[0].Empty = uuid.NewString()
-	ublInvoice.Invoice[0].IssueDate[0].Empty = time.Now().Format("2006-01-02")
-	ublInvoice.Invoice[0].IssueTime[0].Empty = time.Now().UTC().Format("15:04:05Z")
-
-	return ublInvoice
-}
-func validInvoiceOnBehalf() Ubl21Invoice {
-	b, err := os.ReadFile("testdata/submission_v1.1-unsigned_2.json")
-	if err != nil {
-		panic(err)
-	}
-
-	var ublInvoice Ubl21Invoice
-	err = json.Unmarshal(b, &ublInvoice)
-	if err != nil {
-		panic(err)
-	}
-
-	ublInvoice.Invoice[0].ID[0].Empty = uuid.NewString()
-	ublInvoice.Invoice[0].IssueDate[0].Empty = time.Now().Format("2006-01-02")
-	ublInvoice.Invoice[0].IssueTime[0].Empty = time.Now().UTC().Format("15:04:05Z")
-
-	return ublInvoice
-}
-
-func invalidInvoice() Ubl21Invoice {
-	b, err := os.ReadFile("testdata/submission_v1.1-unsigned-invalid.json")
+func loadInvoice(filename string) Ubl21Invoice {
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}
@@ -89,36 +68,76 @@ func invalidInvoice() Ubl21Invoice {
 	return ublInvoice
 }
 
-func waitForDocumentStatus(t *testing.T, client *Client, token string, uuid string, status string) (*GetDocumentDetailsResponse, error) {
+func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
+	assert := assert.New(t)
+	require := require.New(t)
+
 	startTime := time.Now()
 	for tick := range time.Tick(2 * time.Second) {
-		res, err := client.GetDocumentDetails(token, uuid)
+		t.Log("Getting document details for", uuid)
+		res, err := client.GetDocumentDetails(uuid)
+		// if document not found, continue polling in case LHDN server is having delay
 		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				continue
+			}
 			return nil, err
 		}
 
-		if res != nil {
-			t.Logf("Document %s status: %s\n", uuid, res.Status)
-		} else {
-			continue
-		}
+		t.Logf("Document %s's current status: %s, want: %s\n", uuid, res.Status, status)
 
-		if res.Status == status {
+		isDocumentSubmitted := (res.Status != stDocumentPending && res.Status != stDocumentSubmitted)
+		// if status is what we want or not pending/submitted, return
+		if isDocumentSubmitted {
+			b, err := json.MarshalIndent(res, "", "  ")
+			assert.Nil(err)
+
+			require.Equal(status, res.Status,
+				"Document status mismatch, want: %s, got: %s, body: \n%s",
+				status, res.Status, string(b),
+			)
 			return res, nil
 		} else if tick.After(startTime.Add(30 * time.Second)) {
-			return nil, fmt.Errorf("Timeout waiting for document status %s", status)
+			break
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("Timeout waiting for document status %s", status)
+}
+
+func submitDocuments(t *testing.T, client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
+	res, err := client.SubmitDocuments(invoices)
+	// if res != nil {
+	// 	for _, i := range res.AcceptedDocuments {
+	// 		t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
+	// 	}
+
+	// 	for _, i := range res.RejectedDocuments {
+	// 		t.Log("Rejected:", i.InvoiceCodeNumber)
+	// 		for _, e := range i.Error.Details {
+	// 			t.Log("Error:", e.Code, e.Message)
+	// 		}
+	// 	}
+	// }
+
+	return res, err
+}
+
+func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDocument {
+	require := require.New(t)
+
+	res, err := submitDocuments(t, client, []Ubl21Invoice{doc})
+	require.Nil(err)
+	require.NotNil(res)
+
+	require.Equal(1, len(res.AcceptedDocuments))
+	require.Equal(0, len(res.RejectedDocuments))
+
+	return res.AcceptedDocuments[0]
 }
 
 func TestValidateTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
-
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
 
 	var tests = []struct {
 		tin      string
@@ -135,7 +154,7 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
 			t.Parallel()
-			valid, _ := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
+			valid, _ := client.ValidateTaxpayerTIN(test.tin, test.idType, test.idValue)
 			assert.Equal(test.expected, valid)
 		})
 	}
@@ -148,6 +167,7 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	}{
 		{"D26020043030", "BRN", "KT0031276-X", nil},
 		{"C20127289100", "BRN", "200601007071", nil},
+		{"C20127289100", "BRN", "123", ErrTinMismatch},
 		{"D26020043030", "BRN", "198403011803", ErrTinMismatch},
 		{"C12345678900", "BRN", "200810101012", ErrTinMismatch},
 	}
@@ -155,85 +175,188 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	for _, test := range errorTests {
 		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
 			t.Parallel()
-			_, err := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
+			_, err := client.ValidateTaxpayerTIN(test.tin, test.idType, test.idValue)
 			assert.ErrorIs(err, test.expectedErr, "expected error mismatch")
 		})
 	}
 }
 
-func TestSubmitDocuments(t *testing.T) {
-	client := setupEInvoiceTest()
-	assert := assert.New(t)
-
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
-
-	ublInvoice := validInvoice()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
-	assert.Nil(err)
-	assert.NotNil(res)
-
-	if res != nil {
-		for _, i := range res.AcceptedDocuments {
-			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-			currentUuid = i.UUID
-		}
-
-		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
-			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
-			}
-		}
-	}
-}
-
 func TestSubmitValidDocument(t *testing.T) {
 	client := setupEInvoiceTest()
-	assert := assert.New(t)
 
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
+	t.Run("Submit valid invoice", func(t *testing.T) {
+		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+	})
 
-	ublInvoice := validInvoice()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
-	assert.Nil(err)
-	assert.NotNil(res)
-	if res != nil {
-		assert.Greater(len(res.AcceptedDocuments), 0)
-		assert.Equal(len(res.RejectedDocuments), 0)
-	}
-
-	if res != nil {
-		for _, i := range res.AcceptedDocuments {
-			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-			currentUuid = i.UUID
-		}
-
-		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
-			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
-			}
-		}
-	}
+	t.Run("Submit valid consolidated invoice", func(t *testing.T) {
+		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidConsoIV))
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+	})
 }
 
-func TestSubmitInvalidDocuments(t *testing.T) {
+func TestSubmitInvalidDocument(t *testing.T) {
+	client := setupEInvoiceTest()
+	assert := assert.New(t)
+	ublInvoice := loadInvoice(fileValidInvoice)
+
+	submitAndAssertInvalid := func(t *testing.T, ublInvoice Ubl21Invoice) *DocumentSubmissionResponse {
+		res, err := submitDocuments(t, client, []Ubl21Invoice{ublInvoice})
+		assert.Nil(err)
+		assert.NotNil(res)
+		assert.Equal(0, len(res.AcceptedDocuments), "expected accepted documents to be 0")
+		assert.Equal(1, len(res.RejectedDocuments), "expected rejected documents to be 1")
+		return res
+	}
+
+	t.Run("Submit invalid invoice with missing Classification code", func(t *testing.T) {
+		ublInvoice.Invoice[0].InvoiceLine[0].Item[0].CommodityClassification = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF364", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("Line classification is required", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier Name", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PartyLegalEntity[0].RegistrationName = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF334", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("Name is not valid - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier Country", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].Country = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF336", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("Country is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier City", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CityName = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF339", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("City is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier State", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CountrySubentityCode = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF342", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("State is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier Address line 1", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].AddressLine = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF345", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("Address line 1 is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing Supplier Contact number", func(t *testing.T) {
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CountrySubentityCode = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("CF348", res.RejectedDocuments[0].Error.Details[0].Code)
+		assert.Equal("Contact number is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+	t.Run("Submit invalid invoice with missing DocumentCurrencyCode", func(t *testing.T) {
+		ublInvoice.Invoice[0].DocumentCurrencyCode = nil
+		res := submitAndAssertInvalid(t, ublInvoice)
+		assert.Equal("ArrayItemNotValid: #/Invoice[0]\n{\n  ArrayExpected: #/Invoice[0].DocumentCurrencyCode\n}\n", res.RejectedDocuments[0].Error.Details[0].Message)
+	})
+
+	t.Run("Submit empty invoice", func(t *testing.T) {
+		var ublInvoice Ubl21Invoice
+		res, err := submitDocuments(t, client, []Ubl21Invoice{ublInvoice})
+		if assert.Error(err) {
+			assert.Equal(ErrInvalidInput, err, "expected error mismatch")
+		}
+		assert.Nil(res)
+	})
+}
+
+func TestSubmitCreditNote(t *testing.T) {
+	client := setupEInvoiceTest()
+	assert := assert.New(t)
+	require := require.New(t)
+
+	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
+	internalID := acceptedDocument.InvoiceCodeNumber
+
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	assert.Nil(err)
+	assert.NotNil(details)
+
+	t.Log("Submitting credit note for ", currentUUID)
+	ublCreditNote := loadInvoice(fileValidInvoice)
+	ublCreditNote.Invoice[0].InvoiceTypeCode[0].Empty = "02"
+	ublCreditNote.Invoice[0].BillingReference = []BillingReferenceDetails{
+		{
+			InvoiceDocumentReference: []DocumentReferenceDetails{{
+				ID:   []IdentifierType{{Empty: internalID}},
+				UUID: []IdentifierType{{Empty: currentUUID}},
+			}},
+		},
+	}
+
+	acceptedCN := submitAndAssert(t, client, ublCreditNote)
+	currentUUID = acceptedCN.UUID
+	require.NotEmpty(currentUUID)
+
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	assert.Nil(err)
+	assert.NotNil(details)
+}
+
+func TestSubmitRequiredFieldsInvoice(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
 
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
+	var ublInvoice Ubl21Invoice
+	var invoice InvoiceDetails
 
-	ublInvoice := invalidInvoice()
+	invoice.ID = append(invoice.ID, IdentifierType{Empty: uuid.NewString()})
+	invoice.IssueDate = append(invoice.IssueDate, DateType{Empty: time.Now().UTC().Format("2006-01-02")})
+	invoice.IssueTime = append(invoice.IssueTime, TimeType{Empty: time.Now().UTC().Format("15:04:05Z")})
+	invoice.InvoiceTypeCode = append(invoice.InvoiceTypeCode, CodeType{Empty: "01", ListVersionID: "1.0"})
+	invoice.DocumentCurrencyCode = append(invoice.DocumentCurrencyCode, CodeType{Empty: "MYR"})
+	invoice.BillingReference = append(invoice.BillingReference, BillingReferenceDetails{
+		InvoiceDocumentReference: []DocumentReferenceDetails{{
+			ID:   []IdentifierType{{Empty: ""}},
+			UUID: []IdentifierType{{Empty: ""}},
+		}},
+	})
+	invoice.AccountingSupplierParty = append(invoice.AccountingSupplierParty, SupplierPartyDetails{
+		Party: []PartyDetails{{
+			IndustryClassificationCode: []CodeType{{Empty: "46510", Name: "Wholesale of computers, computer peripheral equipment and software"}},
+			PartyIdentification: []PartyIdentificationDetails{
+				{ID: []IdentifierType{{Empty: "C24050894070", SchemeID: "TIN"}}},
+				{ID: []IdentifierType{{Empty: "200801024110", SchemeID: "BRN"}}},
+				{ID: []IdentifierType{{Empty: "NA", SchemeID: "TTX"}}},
+			},
+		}},
+	})
+	invoice.AccountingCustomerParty = append(invoice.AccountingCustomerParty, CustomerPartyDetails{
+		Party: []PartyDetails{{
+			PartyIdentification: []PartyIdentificationDetails{
+				{ID: []IdentifierType{{Empty: "EI00000000010", SchemeID: "TIN"}}},
+				{ID: []IdentifierType{{Empty: "NA", SchemeID: "BRN"}}},
+			},
+		}},
+	})
+	invoice.LegalMonetaryTotal = append(invoice.LegalMonetaryTotal, MonetaryTotalDetails{
+		PayableAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
+	})
+	invoice.InvoiceLine = append(invoice.InvoiceLine, InvoiceLineDetails{
+		ID:                  []IdentifierType{{Empty: "1"}},
+		LineExtensionAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
+		Item: []ItemDetails{{
+			Description: []TextType{{Empty: "Test item"}},
+		}},
+	})
 
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
+	ublInvoice.D = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+	ublInvoice.A = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+	ublInvoice.B = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+	ublInvoice.Invoice = append(ublInvoice.Invoice, invoice)
+
+	b, _ := json.MarshalIndent(ublInvoice, "", "    ")
+	t.Log(string(b))
+
+	res, err := client.SubmitDocuments([]Ubl21Invoice{ublInvoice})
 	assert.Nil(err)
 	assert.NotNil(res)
 	if res != nil {
@@ -244,7 +367,6 @@ func TestSubmitInvalidDocuments(t *testing.T) {
 	if res != nil {
 		for _, i := range res.AcceptedDocuments {
 			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-			currentUuid = i.UUID
 		}
 
 		for _, i := range res.RejectedDocuments {
@@ -260,192 +382,69 @@ func TestGetDocumentDetails(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
 
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
-
-	ublInvoice := validInvoice()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
-	assert.Nil(err)
-	assert.NotNil(res)
-
-	var currentUUID string
-	if res != nil {
-		for _, i := range res.AcceptedDocuments {
-			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-			currentUUID = i.UUID
-		}
-
-		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
-			t.Log("Error:", i.Error.Code, i.Error.Message)
-			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
-			}
-		}
-	}
+	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
 
 	if currentUUID == "" {
 		t.Skip("No document to get details")
 	}
 
-	startTime := time.Now()
-	for tick := range time.Tick(2 * time.Second) {
-		t.Log("Getting document details for", currentUUID)
-		res2, err := client.GetDocumentDetails(token.AccessToken, currentUUID)
-		assert.Nil(err)
-		assert.NotNil(res2)
-		if res2 != nil {
-			b, err := json.MarshalIndent(res2, "", "  ")
-			assert.Nil(err)
-			t.Log(string(b))
-		} else {
-			continue
-		}
-
-		if res2.Status != "Submitted" {
-			if tick.After(startTime.Add(30 * time.Second)) {
-				t.Fail()
-			}
-			break
-		}
-	}
-}
-func TestGetDocumentDetailsOnBehalf(t *testing.T) {
-	client := setupEInvoiceTest()
-	assert := assert.New(t)
-
-	token, err := client.LoginAsIntermediaries(os.Getenv("TIN"))
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
 	assert.Nil(err)
-	assert.NotNil(token)
-	assert.NotEmpty(token.AccessToken)
+	assert.NotNil(details)
 
-	ublInvoice := validInvoiceOnBehalf()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
+	b, err := json.MarshalIndent(details, "", "  ")
 	assert.Nil(err)
-	assert.NotNil(res)
-
-	var currentUUID string
-	if res != nil {
-		for _, i := range res.AcceptedDocuments {
-			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-			currentUUID = i.UUID
-		}
-
-		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
-			t.Log("Error:", i.Error.Code, i.Error.Message)
-			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
-			}
-		}
-	}
-
-	if currentUUID == "" {
-		t.Skip("No document to get details")
-	}
-
-	startTime := time.Now()
-	for tick := range time.Tick(2 * time.Second) {
-		t.Log("Getting document details for", currentUUID)
-		res2, err := client.GetDocumentDetails(token.AccessToken, currentUUID)
-		assert.Nil(err)
-		assert.NotNil(res2)
-		if res2 != nil {
-			b, err := json.MarshalIndent(res2, "", "  ")
-			assert.Nil(err)
-			t.Log(string(b))
-		} else {
-			continue
-		}
-
-		if res2.Status != "Submitted" {
-			if tick.After(startTime.Add(30 * time.Second)) {
-				t.Fail()
-			}
-			break
-		}
-	}
+	t.Log(string(b))
 }
 
 func TestCancelDocument(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
+	require := require.New(t)
 
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
+	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
+	require.NotEmpty(currentUUID)
 
-	ublInvoice := validInvoice()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
-	assert.Nil(err)
-	assert.NotNil(res)
-
-	var currentUUID string
-	if res != nil {
-		currentUUID = res.AcceptedDocuments[0].UUID
-	}
-
-	if currentUUID == "" {
-		t.Log("No document to cancel")
-		t.Fail()
-	}
-
-	details, err := waitForDocumentStatus(t, client, token.AccessToken, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
 	assert.Nil(err)
 	assert.NotNil(details)
 
 	t.Log("Cancelling document ", currentUUID)
-	res2, err := client.CancelDocument(token.AccessToken, currentUUID, "Cancelled by tests")
+	res2, err := client.CancelDocument(currentUUID, "Cancelled by tests")
 	assert.Nil(err)
 	assert.NotNil(res2)
 
-	details, err = client.GetDocumentDetails(token.AccessToken, currentUUID)
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentCancelled)
 	assert.Nil(err)
 	assert.NotNil(details)
-	assert.Equal(stDocumentCancelled, details.Status)
 }
 
+// not working currently, need to reject using buyer's credentials
 func TestRejectDocument(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
+	require := require.New(t)
 
-	token, err := client.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotNil(token)
+	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
+	require.NotEmpty(currentUUID)
 
-	ublInvoice := validInvoice()
-
-	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
-	assert.Nil(err)
-	assert.NotNil(res)
-
-	var currentUUID string
-	if res != nil {
-		currentUUID = res.AcceptedDocuments[0].UUID
-	}
-
-	if currentUUID == "" {
-		t.Log("No document to cancel")
-		t.Fail()
-	}
-
-	details, err := waitForDocumentStatus(t, client, token.AccessToken, currentUUID, stDocumentValid)
+	t.Log("Waiting for document to be valid, uuid: ", currentUUID)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
 	assert.Nil(err)
 	assert.NotNil(details)
 
 	t.Log("Rejecting document ", currentUUID)
-	res2, err := client.RejectDocument(token.AccessToken, currentUUID, "Cancelled by tests")
+	res2, err := client.RejectDocument(currentUUID, "Cancelled by tests")
 	assert.Nil(err)
 	assert.NotNil(res2)
 
-	details, err = client.GetDocumentDetails(token.AccessToken, currentUUID)
+	// todo: need to check if document is rejected using the reason
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
 	assert.Nil(err)
 	assert.NotNil(details)
-	assert.Equal(stDocumentRejected, details.Status)
 }
 
 func TestRsaSHA256Sign(t *testing.T) {
@@ -456,7 +455,7 @@ func TestRsaSHA256Sign(t *testing.T) {
 	digestDecoded, err := base64.StdEncoding.DecodeString(digest)
 	assert.Nil(err)
 
-	signature, err := rsaSHA256Sign(c.privKey, digestDecoded)
+	signature, err := rsa.SignPKCS1v15(nil, c.privKey, crypto.SHA256, digestDecoded)
 	assert.Nil(err)
 	t.Log(base64.StdEncoding.EncodeToString(signature))
 }

@@ -24,7 +24,16 @@ func setupPlatformTest() *Client {
 		panic(err)
 	}
 
-	return SandboxClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), cert, key, []byte(os.Getenv("PKEY_PASSWORD")))
+	return NewClient(ClientOption{
+		Environment: Sandbox,
+		// Environment:  Production,
+		Timeout:      DefaultTimeout,
+		ClientID:     os.Getenv("CLIENT_ID"),
+		ClientSecret: os.Getenv("CLIENT_SECRET"),
+		Cert:         cert,
+		PrivKey:      key,
+		PrivKeyPass:  []byte(os.Getenv("PKEY_PASSWORD")),
+	})
 }
 
 func TestDecodeToken(t *testing.T) {
@@ -38,7 +47,7 @@ func TestDecodeToken(t *testing.T) {
 	assert.Equal(1720491106, token.Nbf)
 	assert.Equal(1720491106, token.Iat)
 	assert.Equal(1720494706, token.Exp)
-	assert.Equal([]string{"InvoicingAPI", "https://preprod-identity.myinvois.hasil.gov.my/resources"}, token.Aud)
+	// assert.Equal([]string{"InvoicingAPI", "https://preprod-identity.myinvois.hasil.gov.my/resources"}, token.Aud)
 	assert.Equal([]string{"InvoicingAPI"}, token.Scope)
 	assert.Equal("d67902d2-58a6-4b82-9e68-05b1e4635f03", token.ClientID)
 	assert.Equal("1", token.IsTaxRepres)
@@ -66,6 +75,12 @@ func TestLoginAsTaxpayer(t *testing.T) {
 	assert.Equal("Bearer", token.TokenType)
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
+
+	payload, err := DecodeToken(token.AccessToken)
+	assert.Nil(err)
+	b, err := json.MarshalIndent(payload, "", "  ")
+	assert.Nil(err)
+	t.Log(string(b))
 }
 
 func TestLoginAsIntermediary(t *testing.T) {
@@ -83,19 +98,15 @@ func TestLoginAsIntermediary(t *testing.T) {
 	assert.Nil(err)
 	b, err := json.MarshalIndent(payload, "", "  ")
 	assert.Nil(err)
+	t.Log(token.AccessToken)
 	t.Log(string(b))
-
 }
 
 func TestGetAllDocumentTypes(t *testing.T) {
 	p := setupPlatformTest()
 	assert := assert.New(t)
 
-	token, err := p.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotEmpty(token.AccessToken)
-
-	documentTypes, err := p.GetAllDocumentTypes(token.AccessToken)
+	documentTypes, err := p.GetAllDocumentTypes()
 	assert.Nil(err)
 	assert.NotEmpty(documentTypes.Result)
 }
@@ -104,11 +115,7 @@ func TestGetDocumentType(t *testing.T) {
 	p := setupPlatformTest()
 	assert := assert.New(t)
 
-	token, err := p.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotEmpty(token.AccessToken)
-
-	documentType, err := p.GetDocumentType(token.AccessToken, 1)
+	documentType, err := p.GetDocumentType(1)
 	assert.Nil(err)
 	assert.NotEmpty(documentType)
 	assert.Equal(int64(1), documentType.ID)

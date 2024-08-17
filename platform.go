@@ -43,11 +43,11 @@ type OAuth2Token struct {
 }
 
 type TokenPayload struct {
-	Iss               string   `json:"iss"`
-	Nbf               int      `json:"nbf"`
-	Iat               int      `json:"iat"`
-	Exp               int      `json:"exp"`
-	Aud               []string `json:"aud"`
+	Iss string `json:"iss"`
+	Nbf int    `json:"nbf"`
+	Iat int    `json:"iat"`
+	Exp int    `json:"exp"`
+	// Aud               []string `json:"aud"`
 	Scope             []string `json:"scope"`
 	ClientID          string   `json:"client_id"`
 	IsTaxRepres       string   `json:"IsTaxRepres"`
@@ -199,9 +199,9 @@ func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, er
 
 // GetAllDocumentTypes retrieves all document types
 // api signature: GET /api/v1.0/documenttypes
-func (p *PlatformAPI) GetAllDocumentTypes(token string) (*DocumentTypes, error) {
+func (p *PlatformAPI) GetAllDocumentTypes() (*DocumentTypes, error) {
 	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getAllDocumentTypes)
-	req, err := newAuthenticatedRequest("GET", endpoint.String(), token, nil)
+	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -223,10 +223,10 @@ func (p *PlatformAPI) GetAllDocumentTypes(token string) (*DocumentTypes, error) 
 
 // GetDocumentType retrieves a document type by id
 // api signature: GET /api/v1.0/documenttypes/{id}
-func (p *PlatformAPI) GetDocumentType(token string, id int) (*DocumentType, error) {
+func (p *PlatformAPI) GetDocumentType(id int) (*DocumentType, error) {
 	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getDocumentType)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%d", id)
-	req, err := newAuthenticatedRequest("GET", endpoint.String(), token, nil)
+	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
