@@ -70,8 +70,8 @@ func newClient(opt ClientOption) *Client {
 	}
 
 	c := &Client{
-		PlatformAPI: NewPlatformClient(u, httpClient, opt.ClientID, opt.ClientSecret),
-		EInvoiceAPI: NewEInvoiceClient(u, httpClient, *certWrapper, MustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
+		PlatformAPI: newPlatformClient(u, httpClient, opt.ClientID, opt.ClientSecret),
+		EInvoiceAPI: newEInvoiceClient(u, httpClient, *certWrapper, MustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
 	}
 
 	return c

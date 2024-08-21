@@ -37,7 +37,7 @@ type EInvoiceAPI struct {
 	privKey          *rsa.PrivateKey
 }
 
-func NewEInvoiceClient(endpoint *url.URL, httpClient *http.Client, cert x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
+func newEInvoiceClient(endpoint *url.URL, httpClient *http.Client, cert x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
 	return EInvoiceAPI{
 		myInvoisEndpoint: endpoint,
 		httpClient:       httpClient,
@@ -662,8 +662,4 @@ func sha256Hash(data []byte) []byte {
 func computeDigest(data []byte) string {
 	h := sha256Hash(data)
 	return base64.StdEncoding.EncodeToString(h)
-}
-
-func rsaSHA256Sign(pkey *rsa.PrivateKey, data []byte) ([]byte, error) {
-	return rsa.SignPKCS1v15(nil, pkey, crypto.SHA256, data)
 }

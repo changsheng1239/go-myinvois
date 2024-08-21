@@ -26,7 +26,7 @@ type PlatformAPI struct {
 	clientSecret     string
 }
 
-func NewPlatformClient(endpoint *url.URL, httpClient *http.Client, clientID, clientSecret string) PlatformAPI {
+func newPlatformClient(endpoint *url.URL, httpClient *http.Client, clientID, clientSecret string) PlatformAPI {
 	return PlatformAPI{
 		myInvoisEndpoint: endpoint,
 		httpClient:       httpClient,

@@ -104,20 +104,23 @@ func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status str
 	return nil, fmt.Errorf("Timeout waiting for document status %s", status)
 }
 
-func submitDocuments(t *testing.T, client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
-	res, err := client.SubmitDocuments(invoices)
-	// if res != nil {
-	// 	for _, i := range res.AcceptedDocuments {
-	// 		t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-	// 	}
+func printSubmissionResponse(t *testing.T, res *DocumentSubmissionResponse) {
+	if res != nil {
+		for _, i := range res.AcceptedDocuments {
+			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
+		}
 
-	// 	for _, i := range res.RejectedDocuments {
-	// 		t.Log("Rejected:", i.InvoiceCodeNumber)
-	// 		for _, e := range i.Error.Details {
-	// 			t.Log("Error:", e.Code, e.Message)
-	// 		}
-	// 	}
-	// }
+		for _, i := range res.RejectedDocuments {
+			t.Log("Rejected:", i.InvoiceCodeNumber)
+			for _, e := range i.Error.Details {
+				t.Log("Error:", e.Code, e.Message)
+			}
+		}
+	}
+}
+
+func submitDocuments(client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
+	res, err := client.SubmitDocuments(invoices)
 
 	return res, err
 }
@@ -125,7 +128,7 @@ func submitDocuments(t *testing.T, client *Client, invoices []Ubl21Invoice) (*Do
 func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDocument {
 	require := require.New(t)
 
-	res, err := submitDocuments(t, client, []Ubl21Invoice{doc})
+	res, err := submitDocuments(client, []Ubl21Invoice{doc})
 	require.Nil(err)
 	require.NotNil(res)
 
@@ -198,10 +201,10 @@ func TestSubmitValidDocument(t *testing.T) {
 func TestSubmitInvalidDocument(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
-	ublInvoice := loadInvoice(fileValidInvoice)
 
 	submitAndAssertInvalid := func(t *testing.T, ublInvoice Ubl21Invoice) *DocumentSubmissionResponse {
-		res, err := submitDocuments(t, client, []Ubl21Invoice{ublInvoice})
+		res, err := submitDocuments(client, []Ubl21Invoice{ublInvoice})
+		printSubmissionResponse(t, res)
 		assert.Nil(err)
 		assert.NotNil(res)
 		assert.Equal(0, len(res.AcceptedDocuments), "expected accepted documents to be 0")
@@ -210,48 +213,56 @@ func TestSubmitInvalidDocument(t *testing.T) {
 	}
 
 	t.Run("Submit invalid invoice with missing Classification code", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].InvoiceLine[0].Item[0].CommodityClassification = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF364", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("Line classification is required", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier Name", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PartyLegalEntity[0].RegistrationName = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF334", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("Name is not valid - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier Country", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].Country = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF336", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("Country is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier City", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CityName = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF339", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("City is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier State", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CountrySubentityCode = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF342", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("State is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier Address line 1", func(t *testing.T) {
-		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].AddressLine = nil
+		ublInvoice := loadInvoice(fileValidInvoice)
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].AddressLine[0].Line[0].Empty = ""
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF345", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("Address line 1 is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing Supplier Contact number", func(t *testing.T) {
-		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].PostalAddress[0].CountrySubentityCode = nil
+		ublInvoice := loadInvoice(fileValidInvoice)
+		ublInvoice.Invoice[0].AccountingSupplierParty[0].Party[0].Contact[0].Telephone = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("CF348", res.RejectedDocuments[0].Error.Details[0].Code)
 		assert.Equal("Contact number is required - SUPPLIER", res.RejectedDocuments[0].Error.Details[0].Message)
 	})
 	t.Run("Submit invalid invoice with missing DocumentCurrencyCode", func(t *testing.T) {
+		ublInvoice := loadInvoice(fileValidInvoice)
 		ublInvoice.Invoice[0].DocumentCurrencyCode = nil
 		res := submitAndAssertInvalid(t, ublInvoice)
 		assert.Equal("ArrayItemNotValid: #/Invoice[0]\n{\n  ArrayExpected: #/Invoice[0].DocumentCurrencyCode\n}\n", res.RejectedDocuments[0].Error.Details[0].Message)
@@ -259,7 +270,7 @@ func TestSubmitInvalidDocument(t *testing.T) {
 
 	t.Run("Submit empty invoice", func(t *testing.T) {
 		var ublInvoice Ubl21Invoice
-		res, err := submitDocuments(t, client, []Ubl21Invoice{ublInvoice})
+		res, err := submitDocuments(client, []Ubl21Invoice{ublInvoice})
 		if assert.Error(err) {
 			assert.Equal(ErrInvalidInput, err, "expected error mismatch")
 		}
@@ -301,60 +312,60 @@ func TestSubmitCreditNote(t *testing.T) {
 	assert.NotNil(details)
 }
 
-func TestSubmitRequiredFieldsInvoice(t *testing.T) {
+func TestRequiredFieldsInvoice(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)
 
 	var ublInvoice Ubl21Invoice
 	var invoice InvoiceDetails
 
-	invoice.ID = append(invoice.ID, IdentifierType{Empty: uuid.NewString()})
-	invoice.IssueDate = append(invoice.IssueDate, DateType{Empty: time.Now().UTC().Format("2006-01-02")})
-	invoice.IssueTime = append(invoice.IssueTime, TimeType{Empty: time.Now().UTC().Format("15:04:05Z")})
-	invoice.InvoiceTypeCode = append(invoice.InvoiceTypeCode, CodeType{Empty: "01", ListVersionID: "1.0"})
-	invoice.DocumentCurrencyCode = append(invoice.DocumentCurrencyCode, CodeType{Empty: "MYR"})
-	invoice.BillingReference = append(invoice.BillingReference, BillingReferenceDetails{
-		InvoiceDocumentReference: []DocumentReferenceDetails{{
-			ID:   []IdentifierType{{Empty: ""}},
-			UUID: []IdentifierType{{Empty: ""}},
-		}},
-	})
-	invoice.AccountingSupplierParty = append(invoice.AccountingSupplierParty, SupplierPartyDetails{
-		Party: []PartyDetails{{
-			IndustryClassificationCode: []CodeType{{Empty: "46510", Name: "Wholesale of computers, computer peripheral equipment and software"}},
-			PartyIdentification: []PartyIdentificationDetails{
-				{ID: []IdentifierType{{Empty: "C24050894070", SchemeID: "TIN"}}},
-				{ID: []IdentifierType{{Empty: "200801024110", SchemeID: "BRN"}}},
-				{ID: []IdentifierType{{Empty: "NA", SchemeID: "TTX"}}},
-			},
-		}},
-	})
-	invoice.AccountingCustomerParty = append(invoice.AccountingCustomerParty, CustomerPartyDetails{
-		Party: []PartyDetails{{
-			PartyIdentification: []PartyIdentificationDetails{
-				{ID: []IdentifierType{{Empty: "EI00000000010", SchemeID: "TIN"}}},
-				{ID: []IdentifierType{{Empty: "NA", SchemeID: "BRN"}}},
-			},
-		}},
-	})
-	invoice.LegalMonetaryTotal = append(invoice.LegalMonetaryTotal, MonetaryTotalDetails{
-		PayableAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
-	})
-	invoice.InvoiceLine = append(invoice.InvoiceLine, InvoiceLineDetails{
-		ID:                  []IdentifierType{{Empty: "1"}},
-		LineExtensionAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
-		Item: []ItemDetails{{
-			Description: []TextType{{Empty: "Test item"}},
-		}},
-	})
+	// required fields for structured invoice
+	{
+		invoice.ID = append(invoice.ID, IdentifierType{Empty: uuid.NewString()})
+		invoice.IssueDate = append(invoice.IssueDate, DateType{Empty: time.Now().UTC().Format("2006-01-02")})
+		invoice.IssueTime = append(invoice.IssueTime, TimeType{Empty: time.Now().UTC().Format("15:04:05Z")})
+		invoice.InvoiceTypeCode = append(invoice.InvoiceTypeCode, CodeType{Empty: "01", ListVersionID: "1.0"})
+		invoice.DocumentCurrencyCode = append(invoice.DocumentCurrencyCode, CodeType{Empty: "MYR"})
+		invoice.BillingReference = append(invoice.BillingReference, BillingReferenceDetails{
+			InvoiceDocumentReference: []DocumentReferenceDetails{{
+				ID:   []IdentifierType{{Empty: ""}},
+				UUID: []IdentifierType{{Empty: ""}},
+			}},
+		})
+		invoice.AccountingSupplierParty = append(invoice.AccountingSupplierParty, SupplierPartyDetails{
+			Party: []PartyDetails{{
+				IndustryClassificationCode: []CodeType{{Empty: "46510", Name: "Wholesale of computers, computer peripheral equipment and software"}},
+				PartyIdentification: []PartyIdentificationDetails{
+					{ID: []IdentifierType{{Empty: "C24050894070", SchemeID: "TIN"}}},
+					{ID: []IdentifierType{{Empty: "200801024110", SchemeID: "BRN"}}},
+					{ID: []IdentifierType{{Empty: "NA", SchemeID: "TTX"}}},
+				},
+			}},
+		})
+		invoice.AccountingCustomerParty = append(invoice.AccountingCustomerParty, CustomerPartyDetails{
+			Party: []PartyDetails{{
+				PartyIdentification: []PartyIdentificationDetails{
+					{ID: []IdentifierType{{Empty: "EI00000000010", SchemeID: "TIN"}}},
+					{ID: []IdentifierType{{Empty: "NA", SchemeID: "BRN"}}},
+				},
+			}},
+		})
+		invoice.LegalMonetaryTotal = append(invoice.LegalMonetaryTotal, MonetaryTotalDetails{
+			PayableAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
+		})
+		invoice.InvoiceLine = append(invoice.InvoiceLine, InvoiceLineDetails{
+			ID:                  []IdentifierType{{Empty: "1"}},
+			LineExtensionAmount: []AmountType{{Empty: 0, CurrencyID: "MYR"}},
+			Item: []ItemDetails{{
+				Description: []TextType{{Empty: "Test item"}},
+			}},
+		})
+	}
 
 	ublInvoice.D = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
 	ublInvoice.A = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
 	ublInvoice.B = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 	ublInvoice.Invoice = append(ublInvoice.Invoice, invoice)
-
-	b, _ := json.MarshalIndent(ublInvoice, "", "    ")
-	t.Log(string(b))
 
 	res, err := client.SubmitDocuments([]Ubl21Invoice{ublInvoice})
 	assert.Nil(err)
@@ -364,15 +375,30 @@ func TestSubmitRequiredFieldsInvoice(t *testing.T) {
 		assert.Greater(len(res.RejectedDocuments), 0)
 	}
 
+	expectedErrors := []string{
+		"CF364: Line classification is required",
+		"CF334: Name is not valid - SUPPLIER",
+		"CF336: Country is required - SUPPLIER",
+		"CF339: City is required - SUPPLIER",
+		"CF342: State is required - SUPPLIER",
+		"CF345: Address line 1 is required - SUPPLIER",
+		"CF348: Contact number is required - SUPPLIER",
+		"CF333: Name is not valid - BUYER",
+		"CF337: Country is required - BUYER",
+		"CF340: City is required - BUYER",
+		"CF343: State is required - BUYER",
+		"CF346: Address line 1 is required - BUYER",
+		"CF349: Contact number is required - BUYER",
+	}
+
 	if res != nil {
 		for _, i := range res.AcceptedDocuments {
 			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
 		}
 
 		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
 			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
+				assert.Contains(expectedErrors, fmt.Sprintf("%s: %s", e.Code, e.Message), "expected error not found")
 			}
 		}
 	}
