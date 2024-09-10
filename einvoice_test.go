@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	fileTestInvoice  = "testdata/test.json"
 	fileValidInvoice = "testdata/invoice-valid.json"
 	fileValidConsoIV = "testdata/conso-invoice-valid.json"
 )
@@ -69,13 +70,14 @@ func loadInvoice(filename string) Ubl21Invoice {
 }
 
 func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
+	token := login(client)
 	assert := assert.New(t)
 	require := require.New(t)
 
 	startTime := time.Now()
 	for tick := range time.Tick(2 * time.Second) {
 		t.Log("Getting document details for", uuid)
-		res, err := client.GetDocumentDetails(uuid)
+		res, err := client.GetDocumentDetails(token.AccessToken, uuid)
 		// if document not found, continue polling in case LHDN server is having delay
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
@@ -120,7 +122,8 @@ func printSubmissionResponse(t *testing.T, res *DocumentSubmissionResponse) {
 }
 
 func submitDocuments(client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
-	res, err := client.SubmitDocuments(invoices)
+	token := login(client)
+	res, err := client.SubmitDocuments(token.AccessToken, invoices)
 
 	return res, err
 }
@@ -131,7 +134,7 @@ func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDoc
 	res, err := submitDocuments(client, []Ubl21Invoice{doc})
 	require.Nil(err)
 	require.NotNil(res)
-
+	printSubmissionResponse(t, res)
 	require.Equal(1, len(res.AcceptedDocuments))
 	require.Equal(0, len(res.RejectedDocuments))
 
@@ -140,6 +143,7 @@ func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDoc
 
 func TestValidateTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 
 	var tests = []struct {
@@ -157,7 +161,7 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
 			t.Parallel()
-			valid, _ := client.ValidateTaxpayerTIN(test.tin, test.idType, test.idValue)
+			valid, _ := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
 			assert.Equal(test.expected, valid)
 		})
 	}
@@ -178,7 +182,7 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	for _, test := range errorTests {
 		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
 			t.Parallel()
-			_, err := client.ValidateTaxpayerTIN(test.tin, test.idType, test.idValue)
+			_, err := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
 			assert.ErrorIs(err, test.expectedErr, "expected error mismatch")
 		})
 	}
@@ -314,6 +318,7 @@ func TestSubmitCreditNote(t *testing.T) {
 
 func TestRequiredFieldsInvoice(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 
 	var ublInvoice Ubl21Invoice
@@ -367,7 +372,7 @@ func TestRequiredFieldsInvoice(t *testing.T) {
 	ublInvoice.B = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 	ublInvoice.Invoice = append(ublInvoice.Invoice, invoice)
 
-	res, err := client.SubmitDocuments([]Ubl21Invoice{ublInvoice})
+	res, err := client.SubmitDocuments(token.AccessToken, []Ubl21Invoice{ublInvoice})
 	assert.Nil(err)
 	assert.NotNil(res)
 	if res != nil {
@@ -426,6 +431,7 @@ func TestGetDocumentDetails(t *testing.T) {
 
 func TestCancelDocument(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -438,7 +444,7 @@ func TestCancelDocument(t *testing.T) {
 	assert.NotNil(details)
 
 	t.Log("Cancelling document ", currentUUID)
-	res2, err := client.CancelDocument(currentUUID, "Cancelled by tests")
+	res2, err := client.CancelDocument(token.AccessToken, currentUUID, "Cancelled by tests")
 	assert.Nil(err)
 	assert.NotNil(res2)
 
@@ -450,6 +456,7 @@ func TestCancelDocument(t *testing.T) {
 // not working currently, need to reject using buyer's credentials
 func TestRejectDocument(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -463,7 +470,7 @@ func TestRejectDocument(t *testing.T) {
 	assert.NotNil(details)
 
 	t.Log("Rejecting document ", currentUUID)
-	res2, err := client.RejectDocument(currentUUID, "Cancelled by tests")
+	res2, err := client.RejectDocument(token.AccessToken, currentUUID, "Cancelled by tests")
 	assert.Nil(err)
 	assert.NotNil(res2)
 

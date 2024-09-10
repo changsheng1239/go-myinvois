@@ -7,6 +7,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupPlatformTest() *Client {
@@ -25,8 +26,7 @@ func setupPlatformTest() *Client {
 	}
 
 	return NewClient(ClientOption{
-		Environment: Sandbox,
-		// Environment:  Production,
+		Environment:  Sandbox,
 		Timeout:      DefaultTimeout,
 		ClientID:     os.Getenv("CLIENT_ID"),
 		ClientSecret: os.Getenv("CLIENT_SECRET"),
@@ -34,6 +34,15 @@ func setupPlatformTest() *Client {
 		PrivKey:      key,
 		PrivKeyPass:  []byte(os.Getenv("PKEY_PASSWORD")),
 	})
+}
+
+func login(p *Client) *OAuth2Token {
+	token, err := p.LoginAsTaxpayer()
+	if err != nil {
+		panic("login failed: " + err.Error())
+	}
+
+	return token
 }
 
 func TestDecodeToken(t *testing.T) {
@@ -68,10 +77,11 @@ func TestDecodeToken(t *testing.T) {
 func TestLoginAsTaxpayer(t *testing.T) {
 	p := setupPlatformTest()
 	assert := assert.New(t)
+	require := require.New(t)
 
 	token, err := p.LoginAsTaxpayer()
-	assert.Nil(err)
-	assert.NotEmpty(token.AccessToken)
+	require.Nil(err)
+	require.NotEmpty(token.AccessToken)
 	assert.Equal("Bearer", token.TokenType)
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
@@ -86,38 +96,35 @@ func TestLoginAsTaxpayer(t *testing.T) {
 func TestLoginAsIntermediary(t *testing.T) {
 	p := setupPlatformTest()
 	assert := assert.New(t)
+	require := require.New(t)
 
 	token, err := p.LoginAsIntermediaries(os.Getenv("TIN"))
-	assert.Nil(err)
-	assert.NotEmpty(token.AccessToken)
+	require.Nil(err)
+	require.NotEmpty(token.AccessToken)
 	assert.Equal("Bearer", token.TokenType)
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
-
-	payload, err := DecodeToken(token.AccessToken)
-	assert.Nil(err)
-	b, err := json.MarshalIndent(payload, "", "  ")
-	assert.Nil(err)
-	t.Log(token.AccessToken)
-	t.Log(string(b))
 }
 
 func TestGetAllDocumentTypes(t *testing.T) {
 	p := setupPlatformTest()
-	assert := assert.New(t)
+	token := login(p)
+	require := require.New(t)
 
-	documentTypes, err := p.GetAllDocumentTypes()
-	assert.Nil(err)
-	assert.NotEmpty(documentTypes.Result)
+	documentTypes, err := p.GetAllDocumentTypes(token.AccessToken)
+	require.Nil(err)
+	require.NotEmpty(documentTypes.Result)
 }
 
 func TestGetDocumentType(t *testing.T) {
 	p := setupPlatformTest()
+	token := login(p)
 	assert := assert.New(t)
+	require := require.New(t)
 
-	documentType, err := p.GetDocumentType(1)
-	assert.Nil(err)
-	assert.NotEmpty(documentType)
+	documentType, err := p.GetDocumentType(token.AccessToken, 1)
+	require.Nil(err)
+	require.NotEmpty(documentType)
 	assert.Equal(int64(1), documentType.ID)
 	assert.Equal(int64(1), documentType.InvoiceTypeCode)
 	assert.Equal("Invoice", documentType.Description)

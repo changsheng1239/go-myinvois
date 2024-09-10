@@ -24,18 +24,16 @@ const (
 )
 
 type platformEndpoints struct {
-	loginAsTaxpayer       *url.URL
-	loginAsIntermediaries *url.URL
-	getAllDocumentTypes   *url.URL
-	getDocumentType       *url.URL
+	login               *url.URL
+	getAllDocumentTypes *url.URL
+	getDocumentType     *url.URL
 }
 
 var (
 	PlatformEndpoints = &platformEndpoints{
-		loginAsTaxpayer:       &url.URL{Path: loginEndpoint},
-		loginAsIntermediaries: &url.URL{Path: loginEndpoint},
-		getAllDocumentTypes:   &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
-		getDocumentType:       &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
+		login:               &url.URL{Path: loginEndpoint},
+		getAllDocumentTypes: &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
+		getDocumentType:     &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
 	}
 )
 

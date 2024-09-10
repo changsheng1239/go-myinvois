@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -138,37 +139,8 @@ func decodeSegment(seg string) ([]byte, error) {
 	return encoding.DecodeString(seg)
 }
 
-// LoginAsTaxpayer logs in as a taxpayer
-// api signature: POST /connect/token
-func (p *PlatformAPI) LoginAsTaxpayer() (*OAuth2Token, error) {
-	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.loginAsTaxpayer)
-	form := url.Values{}
-	form.Add("client_id", p.clientID)
-	form.Add("client_secret", p.clientSecret)
-	form.Add("grant_type", defaultGrantType)
-	form.Add("scope", defaultScope)
-
-	res, err := p.httpClient.Post(endpoint.String(), "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
-	}
-	defer res.Body.Close()
-
-	var token OAuth2Token
-	err = json.NewDecoder(res.Body).Decode(&token)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
-	}
-
-	return &token, nil
-}
-
-// LoginAsIntermediaries logs in as an intermediary
-// api signature: POST /connect/token
-// require header: onbehalfof (taxpayer tin)
-func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, error) {
-	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.loginAsTaxpayer)
-
+func (p *PlatformAPI) login(onbehalfof string) (*OAuth2Token, error) {
+	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.login)
 	form := url.Values{}
 	form.Add("client_id", p.clientID)
 	form.Add("client_secret", p.clientSecret)
@@ -180,13 +152,20 @@ func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, er
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("onbehalfof", onbehalfof)
+	if onbehalfof != "" {
+		req.Header.Add("onbehalfof", onbehalfof)
+	}
 
-	res, err := p.httpClient.Do(req)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(res.Body)
+		return nil, fmt.Errorf("%w: %s", ErrRequestError, b)
+	}
 
 	var token OAuth2Token
 	err = json.NewDecoder(res.Body).Decode(&token)
@@ -197,11 +176,24 @@ func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, er
 	return &token, nil
 }
 
+// LoginAsTaxpayer logs in as a taxpayer
+// api signature: POST /connect/token
+func (p *PlatformAPI) LoginAsTaxpayer() (*OAuth2Token, error) {
+	return p.login("")
+}
+
+// LoginAsIntermediaries logs in as an intermediary
+// api signature: POST /connect/token
+// require header: onbehalfof (taxpayer tin)
+func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, error) {
+	return p.login(onbehalfof)
+}
+
 // GetAllDocumentTypes retrieves all document types
 // api signature: GET /api/v1.0/documenttypes
-func (p *PlatformAPI) GetAllDocumentTypes() (*DocumentTypes, error) {
+func (p *PlatformAPI) GetAllDocumentTypes(accessToken string) (*DocumentTypes, error) {
 	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getAllDocumentTypes)
-	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -211,6 +203,11 @@ func (p *PlatformAPI) GetAllDocumentTypes() (*DocumentTypes, error) {
 		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(res.Body)
+		return nil, fmt.Errorf("%w: %s", ErrRequestError, b)
+	}
 
 	var documentTypes DocumentTypes
 	err = json.NewDecoder(res.Body).Decode(&documentTypes)
@@ -223,10 +220,10 @@ func (p *PlatformAPI) GetAllDocumentTypes() (*DocumentTypes, error) {
 
 // GetDocumentType retrieves a document type by id
 // api signature: GET /api/v1.0/documenttypes/{id}
-func (p *PlatformAPI) GetDocumentType(id int) (*DocumentType, error) {
+func (p *PlatformAPI) GetDocumentType(accessToken string, id int) (*DocumentType, error) {
 	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getDocumentType)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%d", id)
-	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -236,6 +233,11 @@ func (p *PlatformAPI) GetDocumentType(id int) (*DocumentType, error) {
 		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(res.Body)
+		return nil, fmt.Errorf("%w: %s", ErrRequestError, b)
+	}
 
 	var documentType DocumentType
 	err = json.NewDecoder(res.Body).Decode(&documentType)

@@ -1,7 +1,6 @@
 package myinvois
 
 import (
-	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -10,9 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
 const (
@@ -55,14 +51,15 @@ func newClient(opt ClientOption) *Client {
 	}
 	u, _ := url.Parse(apiURL)
 
-	oauthConfig := clientcredentials.Config{
-		ClientID:     opt.ClientID,
-		ClientSecret: opt.ClientSecret,
-		TokenURL:     u.ResolveReference(PlatformEndpoints.loginAsTaxpayer).String(),
-		Scopes:       []string{"InvoicingAPI"},
-		AuthStyle:    oauth2.AuthStyleInParams,
+	// create a httpClient with timeout
+	httpClient := &http.Client{
+		Timeout: opt.Timeout,
+		Transport: &http.Transport{
+			// Example timeouts, adjust as needed
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
 	}
-	httpClient := oauthConfig.Client(context.Background())
 
 	certWrapper, err := NewCertWrapper(opt.Cert)
 	if err != nil {
@@ -110,7 +107,7 @@ func MustParsePrivateKey(privKey, passphrase []byte) *rsa.PrivateKey {
 	return key
 }
 
-func newRequest(httpMethod, endpoint string, body io.Reader) (*http.Request, error) {
+func newRequestWithToken(token string, httpMethod, endpoint string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(httpMethod, endpoint, body)
 	if err != nil {
 		return nil, err
@@ -118,6 +115,7 @@ func newRequest(httpMethod, endpoint string, body io.Reader) (*http.Request, err
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Language", "en")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	return req, nil
 }

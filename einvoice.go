@@ -2,7 +2,6 @@ package myinvois
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -190,7 +189,7 @@ const (
 
 // ValidateTaxpayerTIN validates the taxpayer TIN
 // api signature: GET /api/v1.0/taxpayer/validate/{tin}?idType={idType}&idValue={idValue}
-func (e *EInvoiceAPI) ValidateTaxpayerTIN(tin, idType, idValue string) (bool, error) {
+func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue string) (bool, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.validateTaxpayerTIN)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s", tin)
 
@@ -199,7 +198,7 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(tin, idType, idValue string) (bool, er
 	q.Set("idValue", idValue)
 	endpoint.RawQuery = q.Encode()
 
-	req, err := newRequest(http.MethodGet, endpoint.String(), nil)
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -226,7 +225,7 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(tin, idType, idValue string) (bool, er
 
 // SubmitDocuments submits documents to the LHDN MyInvois API with Digital Signature
 // api signature: POST /api/v1.0/documentsubmissions/
-func (e *EInvoiceAPI) SubmitDocuments(docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
+func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
 
 	var d DocumentSubmission
@@ -262,7 +261,7 @@ func (e *EInvoiceAPI) SubmitDocuments(docs []Ubl21Invoice) (*DocumentSubmissionR
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newRequest("POST", endpoint.String(), bytes.NewReader(b))
+	req, err := newRequestWithToken(accessToken, "POST", endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -305,11 +304,11 @@ func (e *EInvoiceAPI) SubmitDocuments(docs []Ubl21Invoice) (*DocumentSubmissionR
 
 // GetDocumentDetails retrieves the status & details of a document
 // api signature: GET /api/v1.0/documents/{uuid}/details
-func (e *EInvoiceAPI) GetDocumentDetails(uuid string) (*GetDocumentDetailsResponse, error) {
+func (e *EInvoiceAPI) GetDocumentDetails(accessToken, uuid string) (*GetDocumentDetailsResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getDocuments)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s/details", uuid)
 
-	req, err := newRequest("GET", endpoint.String(), nil)
+	req, err := newRequestWithToken(accessToken, "GET", endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -334,17 +333,17 @@ func (e *EInvoiceAPI) GetDocumentDetails(uuid string) (*GetDocumentDetailsRespon
 
 // CancelDocument cancels a document
 // api signature: PUT /api/v1.0/documents/state/{UUID}/state
-func (e *EInvoiceAPI) CancelDocument(uuid, reason string) (*UpdateStatusResponse, error) {
-	return e.updateDocumentStatus(uuid, stDocumentCancelled, reason)
+func (e *EInvoiceAPI) CancelDocument(accessToken, uuid, reason string) (*UpdateStatusResponse, error) {
+	return e.updateDocumentStatus(accessToken, uuid, stDocumentCancelled, reason)
 }
 
 // RejectDocument rejects a document
 // api signature: PUT /api/v1.0/documents/state/{UUID}/state
-func (e *EInvoiceAPI) RejectDocument(uuid, reason string) (*UpdateStatusResponse, error) {
-	return e.updateDocumentStatus(uuid, stDocumentRejected, reason)
+func (e *EInvoiceAPI) RejectDocument(accessToken, uuid, reason string) (*UpdateStatusResponse, error) {
+	return e.updateDocumentStatus(accessToken, uuid, stDocumentRejected, reason)
 }
 
-func (e *EInvoiceAPI) updateDocumentStatus(uuid, status, reason string) (*UpdateStatusResponse, error) {
+func (e *EInvoiceAPI) updateDocumentStatus(accessToken, uuid, status, reason string) (*UpdateStatusResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.updateDocumentStatus(uuid))
 
 	body := UpdateStatusRequest{
@@ -356,7 +355,7 @@ func (e *EInvoiceAPI) updateDocumentStatus(uuid, status, reason string) (*Update
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newRequest("PUT", endpoint.String(), bytes.NewReader(b))
+	req, err := newRequestWithToken(accessToken, "PUT", endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -417,249 +416,4 @@ func (e *EInvoiceAPI) GetRecentDocuments(limit int) ([]GetDocumentDetailsRespons
 	q.Set("pageSize", fmt.Sprintf("%d", limit))
 
 	return nil, nil
-}
-
-func signDocument(pkey *rsa.PrivateKey, iv Ubl21Invoice, cert x509CertWrapper) (*Ubl21Invoice, error) {
-	signatureObject := computeSignatureObject(cert)
-	docBytes, err := json.Marshal(iv)
-	if err != nil {
-		return nil, err
-	}
-
-	_ = os.WriteFile("response/raw.json", docBytes, 0644)
-
-	docDigest := computeDigest(docBytes)
-	signedDocDigest, err := rsa.SignPKCS1v15(nil, pkey, crypto.SHA256, sha256Hash(docBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	signedPropBytes, err := json.Marshal(signatureObject[0].QualifyingProperties[0])
-	if err != nil {
-		return nil, err
-	}
-	signedPropDigest := computeDigest(signedPropBytes)
-
-	signature := SignatureDetails{
-		ID: []IdentifierType{
-			{
-				Empty: "urn:oasis:names:specification:ubl:signature:Invoice",
-			},
-		},
-		SignatureMethod: []TextType{
-			{
-				Empty: "urn:oasis:names:specification:ubl:dsig:enveloped:xades",
-			},
-		},
-	}
-	iv.Invoice[0].Signature = append(iv.Invoice[0].Signature, signature)
-
-	ublDocumentSignature := []UBLDocumentSignature{
-		{
-			SignatureInformation: []SignatureInformation{
-				{
-					ID: []IdentifierType{
-						{
-							Empty: "urn:oasis:names:specification:ubl:signature:1",
-						},
-					},
-					ReferencedSignatureID: []IdentifierType{
-						{
-							Empty: "urn:oasis:names:specification:ubl:signature:Invoice",
-						},
-					},
-					Signature: []Signature{
-						{
-							ID:      "signature",
-							Object:  signatureObject,
-							KeyInfo: computeKeyInfo(cert),
-							SignatureValue: []IdentifierType{
-								{
-									Empty: base64.StdEncoding.EncodeToString(signedDocDigest), // TODO compute signature value
-								},
-							},
-							SignedInfo: computeSignedInfo(docDigest, signedPropDigest),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	ublExtension := UBLExtension{
-		ExtensionURI: []IdentifierType{
-			{
-				Empty: "urn:oasis:names:specification:ubl:dsig:enveloped:xades",
-			},
-		},
-		ExtensionContent: []map[string]interface{}{
-			{
-				"UBLDocumentSignatures": ublDocumentSignature,
-			},
-		},
-	}
-
-	iv.Invoice[0].UBLExtensions = []UBLExtensions{
-		{
-			UBLExtension: []UBLExtension{
-				ublExtension,
-			},
-		},
-	}
-
-	return &iv, nil
-}
-
-func computeSignatureObject(cert x509CertWrapper) []Object {
-	return []Object{
-		{
-			QualifyingProperties: []QualifyingProperty{
-				{
-					Target: "signature",
-					SignedProperties: []SignedProperty{
-						{
-							ID: "id-xades-signed-props",
-							SignedSignatureProperties: []SignedSignatureProperty{
-								{
-									SigningTime: []IdentifierType{
-										{
-											Empty: time.Now().UTC().Format("2006-01-02T15:04:05Z"),
-										},
-									},
-									SigningCertificate: []SigningCertificate{
-										{
-											Cert: []Cert{
-												{
-													CertDigest: []CertDigest{
-														{
-															DigestMethod: []Method{
-																{
-																	Empty:     "",
-																	Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
-																},
-															},
-															DigestValue: []IdentifierType{
-																{
-																	Empty: cert.digest,
-																},
-															},
-														},
-													},
-													IssuerSerial: []IssuerSerial{
-														{
-															X509IssuerName: []IdentifierType{
-																{
-																	Empty: cert.issuer,
-																},
-															},
-															X509SerialNumber: []IdentifierType{
-																{
-																	Empty: cert.serialNumber,
-																},
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func computeKeyInfo(cert x509CertWrapper) []KeyInfo {
-	return []KeyInfo{
-		{
-			X509Data: []X509Datum{
-				{
-					X509Certificate: []IdentifierType{
-						{
-							Empty: cert.base64,
-						},
-					},
-					X509SubjectName: []IdentifierType{
-						{
-							Empty: cert.subject,
-						},
-					},
-					X509IssuerSerial: []IssuerSerial{
-						{
-							X509IssuerName: []IdentifierType{
-								{
-									Empty: cert.issuer,
-								},
-							},
-							X509SerialNumber: []IdentifierType{
-								{
-									Empty: cert.serialNumber,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func computeSignedInfo(docDIgest, signedPropDigest string) []SignedInfo {
-	return []SignedInfo{
-		{
-			SignatureMethod: []Method{
-				{
-					Empty:     "",
-					Algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
-				},
-			},
-			Reference: []Reference{
-				{
-					Type: "http://uri.etsi.org/01903/v1.3.2#SignedProperties",
-					URI:  "#id-xades-signed-props",
-					DigestMethod: []Method{
-						{
-							Empty:     "",
-							Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
-						},
-					},
-					DigestValue: []IdentifierType{
-						{
-							Empty: signedPropDigest,
-						},
-					},
-				},
-				{
-					Type: "",
-					URI:  "",
-					DigestMethod: []Method{
-						{
-							Empty:     "",
-							Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
-						},
-					},
-					DigestValue: []IdentifierType{
-						{
-							Empty: docDIgest,
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func sha256Hash(data []byte) []byte {
-	h := sha256.New()
-	h.Write(data)
-	return h.Sum(nil)
-}
-
-func computeDigest(data []byte) string {
-	h := sha256Hash(data)
-	return base64.StdEncoding.EncodeToString(h)
 }
