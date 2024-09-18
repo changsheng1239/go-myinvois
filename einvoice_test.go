@@ -1,6 +1,7 @@
 package myinvois
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rsa"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antchfx/xmlquery"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
@@ -67,6 +69,31 @@ func loadInvoice(filename string) Ubl21Invoice {
 	ublInvoice.Invoice[0].IssueTime[0].Empty = time.Now().UTC().Format("15:04:05Z")
 
 	return ublInvoice
+}
+
+func loadRawXML(filename string) []byte {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+
+	doc, err := xmlquery.Parse(bytes.NewReader(b))
+	if err != nil {
+		panic(err)
+	}
+
+	// set UUID and IssueDate
+	if uuidNode := xmlquery.FindOne(doc, "//cbc:ID"); uuidNode != nil {
+		uuidNode.FirstChild.Data = uuid.NewString()
+	}
+	if issueDateNode := xmlquery.FindOne(doc, "//cbc:IssueDate"); issueDateNode != nil {
+		issueDateNode.FirstChild.Data = time.Now().Format("2006-01-02")
+	}
+	if issueTimeNode := xmlquery.FindOne(doc, "//cbc:IssueTime"); issueTimeNode != nil {
+		issueTimeNode.FirstChild.Data = time.Now().UTC().Format("15:04:05Z")
+	}
+
+	return []byte(strings.Replace(doc.OutputXML(true), `<?xml version="1.0"?>`, "", 1))
 }
 
 func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
@@ -206,6 +233,29 @@ func TestSubmitValidDocument(t *testing.T) {
 	t.Run("Submit valid consolidated invoice", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidConsoIV))
 		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+	})
+}
+
+func TestSubmitRawXML(t *testing.T) {
+	client := setupEInvoiceTest()
+	require := require.New(t)
+	token := login(client)
+
+	docXML := loadRawXML("testdata/invoice-valid.xml")
+	res, err := client.SubmitRawXML(token.AccessToken, docXML)
+	require.Nil(err)
+	require.NotNil(res)
+
+	t.Run("Submit raw XML document", func(t *testing.T) {
+		iv := loadRawXML("testdata/invoice-valid.xml")
+		res, err := client.SubmitRawXML(token.AccessToken, iv)
+		require.Nil(err)
+		require.NotNil(res)
+		if res != nil {
+			require.Equal(1, len(res.AcceptedDocuments))
+			require.Equal(0, len(res.RejectedDocuments))
+		}
+		waitForDocumentStatus(t, client, res.AcceptedDocuments[0].UUID, stDocumentValid)
 	})
 }
 

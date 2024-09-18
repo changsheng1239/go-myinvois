@@ -16,6 +16,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/antchfx/xmlquery"
 )
 
 var (
@@ -224,6 +226,7 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue stri
 }
 
 // SubmitDocuments submits documents to the LHDN MyInvois API with Digital Signature
+// Support JSON format only
 // api signature: POST /api/v1.0/documentsubmissions/
 func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
@@ -265,7 +268,7 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newRequestWithToken(accessToken, "POST", endpoint.String(), bytes.NewReader(b))
+	req, err := newRequestWithToken(accessToken, http.MethodPost, endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -306,13 +309,88 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 	return &r, nil
 }
 
+// SubmitDocuments submits documents to the LHDN MyInvois API
+// Support XML format without Digital Signature (Invoice v1.0)
+// api signature: POST /api/v1.0/documentsubmissions/
+func (e *EInvoiceAPI) SubmitRawXML(accessToken string, docXML []byte) (*DocumentSubmissionResponse, error) {
+	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
+
+	h := sha256.New()
+	h.Write(docXML)
+
+	doc, err := xmlquery.Parse(bytes.NewReader(docXML))
+	if err != nil {
+		panic(err)
+	}
+	invoiceNode := xmlquery.FindOne(doc, "//Invoice")
+	var invoiceID string
+	if n := invoiceNode.SelectElement("cbc:ID"); n != nil {
+		invoiceID = n.InnerText()
+	}
+
+	ds := DocumentSubmission{
+		Documents: []Document{
+			{
+				Format:       "xml",
+				DocumentHash: hex.EncodeToString(h.Sum(nil)),
+				CodeNumber:   invoiceID,
+				Document:     base64.StdEncoding.EncodeToString(docXML),
+			},
+		},
+	}
+
+	b, err := json.Marshal(ds)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
+	}
+
+	req, err := newRequestWithToken(accessToken, http.MethodPost, endpoint.String(), bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
+	}
+
+	res, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
+	}
+
+	if res.StatusCode != 202 {
+		if res.StatusCode == http.StatusBadRequest {
+			var sErr StandardErrorResponse
+			err = json.NewDecoder(res.Body).Decode(&sErr)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+			}
+			errMsg := sErr.Error.Code + ": "
+			for _, e := range sErr.Error.Details {
+				errMsg += e.Message + "\n"
+			}
+			return nil, errors.New(errMsg)
+		} else if res.StatusCode == http.StatusForbidden {
+			return nil, ErrIncorrectSubmitter
+		} else if res.StatusCode == http.StatusUnprocessableEntity {
+			return nil, ErrDuplicateSubmission
+		} else {
+			return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
+		}
+	}
+
+	var r DocumentSubmissionResponse
+	err = json.NewDecoder(res.Body).Decode(&r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+	}
+
+	return &r, nil
+}
+
 // GetDocumentDetails retrieves the status & details of a document
 // api signature: GET /api/v1.0/documents/{uuid}/details
 func (e *EInvoiceAPI) GetDocumentDetails(accessToken, uuid string) (*GetDocumentDetailsResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getDocuments)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s/details", uuid)
 
-	req, err := newRequestWithToken(accessToken, "GET", endpoint.String(), nil)
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
@@ -359,7 +437,7 @@ func (e *EInvoiceAPI) updateDocumentStatus(accessToken, uuid, status, reason str
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
 
-	req, err := newRequestWithToken(accessToken, "PUT", endpoint.String(), bytes.NewReader(b))
+	req, err := newRequestWithToken(accessToken, http.MethodPut, endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
 	}
