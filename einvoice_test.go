@@ -191,6 +191,13 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 func TestSubmitValidDocument(t *testing.T) {
 	client := setupEInvoiceTest()
 
+	t.Run("Submit valid invoice v1.0", func(t *testing.T) {
+		iv := loadInvoice(fileValidInvoice)
+		iv.Invoice[0].InvoiceTypeCode[0].ListVersionID = "1.0"
+		acceptedDocument := submitAndAssert(t, client, iv)
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+	})
+
 	t.Run("Submit valid invoice", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
 		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)

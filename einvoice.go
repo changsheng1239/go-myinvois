@@ -228,17 +228,21 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue stri
 func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
 	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
 
-	var d DocumentSubmission
+	var ds DocumentSubmission
 	for _, doc := range docs {
 		if len(doc.Invoice) == 0 {
 			return nil, ErrInvalidInput
 		}
 
-		signedDoc, err := signDocument(e.privKey, doc, e.cert)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrSignFailed, err)
+		d := &doc
+		if doc.Invoice[0].InvoiceTypeCode[0].ListVersionID != "1.0" {
+			signedDoc, err := signDocument(e.privKey, doc, e.cert)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrSignFailed, err)
+			}
+			d = signedDoc
 		}
-		b, err := json.Marshal(signedDoc)
+		b, err := json.Marshal(d)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 		}
@@ -248,7 +252,7 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 		h := sha256.New()
 		h.Write(b)
 
-		d.Documents = append(d.Documents, Document{
+		ds.Documents = append(ds.Documents, Document{
 			Format:       "json",
 			DocumentHash: hex.EncodeToString(h.Sum(nil)),
 			CodeNumber:   doc.Invoice[0].ID[0].Empty,
@@ -256,7 +260,7 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 		})
 	}
 
-	b, err := json.Marshal(d)
+	b, err := json.Marshal(ds)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 	}
