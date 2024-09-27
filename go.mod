@@ -1,4 +1,4 @@
-module go-myinvois
+module github.com/changsheng1239/go-myinvois
 
 go 1.23
 
