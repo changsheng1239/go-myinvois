@@ -93,7 +93,7 @@ func loadRawXML(filename string) []byte {
 		issueTimeNode.FirstChild.Data = time.Now().UTC().Format("15:04:05Z")
 	}
 
-	return []byte(strings.Replace(doc.OutputXML(true), `<?xml version="1.0"?>`, "", 1))
+	return []byte(doc.OutputXML(true))
 }
 
 func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
