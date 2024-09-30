@@ -2,12 +2,16 @@ package myinvois
 
 import (
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -61,14 +65,14 @@ func newClient(opt ClientOption) *Client {
 		},
 	}
 
-	certWrapper, err := NewCertWrapper(opt.Cert)
+	certWrapper, err := newCertWrapper(opt.Cert)
 	if err != nil {
 		log.Fatalf("NewCertWrapper failed: %v", err)
 	}
 
 	c := &Client{
 		PlatformAPI: newPlatformClient(u, httpClient, opt.ClientID, opt.ClientSecret),
-		EInvoiceAPI: newEInvoiceClient(u, httpClient, *certWrapper, MustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
+		EInvoiceAPI: newEInvoiceClient(u, httpClient, *certWrapper, mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
 	}
 
 	return c
@@ -94,7 +98,7 @@ func NewClient(opt ClientOption) *Client {
 	return newClient(opt)
 }
 
-func MustParsePrivateKey(privKey, passphrase []byte) *rsa.PrivateKey {
+func mustParsePrivateKey(privKey, passphrase []byte) *rsa.PrivateKey {
 	block, _ := pem.Decode(privKey)
 	der, err := x509.DecryptPEMBlock(block, passphrase)
 	if err != nil {
@@ -105,6 +109,37 @@ func MustParsePrivateKey(privKey, passphrase []byte) *rsa.PrivateKey {
 		log.Fatalf("ParsePKCS1PrivateKey failed: %v", err)
 	}
 	return key
+}
+
+type x509CertWrapper struct {
+	base64       string
+	digest       string
+	issuer       string
+	serialNumber string
+	subject      string
+}
+
+func newCertWrapper(cert []byte) (*x509CertWrapper, error) {
+	block, _ := pem.Decode(cert)
+	if block == nil {
+		return nil, ErrDecodeCertificate
+	}
+
+	c, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrParseCertificate, err)
+	}
+
+	h := sha256.New()
+	h.Write(block.Bytes)
+
+	return &x509CertWrapper{
+		base64:       base64.StdEncoding.EncodeToString(block.Bytes),
+		digest:       base64.StdEncoding.EncodeToString(h.Sum(nil)),
+		issuer:       strings.Join(strings.Split(c.Issuer.String(), ","), ", "),
+		serialNumber: c.SerialNumber.String(),
+		subject:      c.Subject.String(),
+	}, nil
 }
 
 func newRequestWithToken(token string, httpMethod, endpoint string, body io.Reader) (*http.Request, error) {
