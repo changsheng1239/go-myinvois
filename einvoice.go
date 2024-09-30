@@ -4,17 +4,14 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/antchfx/xmlquery"
@@ -45,37 +42,6 @@ func newEInvoiceClient(endpoint *url.URL, httpClient *http.Client, cert x509Cert
 		cert:             cert,
 		privKey:          pk,
 	}
-}
-
-type x509CertWrapper struct {
-	base64       string
-	digest       string
-	issuer       string
-	serialNumber string
-	subject      string
-}
-
-func NewCertWrapper(cert []byte) (*x509CertWrapper, error) {
-	block, _ := pem.Decode(cert)
-	if block == nil {
-		return nil, ErrDecodeCertificate
-	}
-
-	c, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrParseCertificate, err)
-	}
-
-	h := sha256.New()
-	h.Write(block.Bytes)
-
-	return &x509CertWrapper{
-		base64:       base64.StdEncoding.EncodeToString(block.Bytes),
-		digest:       base64.StdEncoding.EncodeToString(h.Sum(nil)),
-		issuer:       strings.Join(strings.Split(c.Issuer.String(), ","), ", "),
-		serialNumber: c.SerialNumber.String(),
-		subject:      c.Subject.String(),
-	}, nil
 }
 
 type DocumentSubmission struct {
@@ -216,7 +182,8 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue stri
 		case 400:
 			return false, fmt.Errorf("%w: %v", ErrInvalidInput, res.Status)
 		case 404:
-			return false, fmt.Errorf("%w: %v", ErrTinMismatch, res.Status)
+			// 404 means the TIN & ID combination does not match
+			return false, nil
 		default:
 			return false, fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
 		}
