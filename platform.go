@@ -21,18 +21,18 @@ var (
 )
 
 type PlatformAPI struct {
-	myInvoisEndpoint *url.URL
-	httpClient       *http.Client
-	clientID         string
-	clientSecret     string
+	baseURL      MyInvoisBaseURL
+	httpClient   *http.Client
+	clientID     string
+	clientSecret string
 }
 
-func newPlatformClient(endpoint *url.URL, httpClient *http.Client, clientID, clientSecret string) PlatformAPI {
+func newPlatformClient(baseURL MyInvoisBaseURL, httpClient *http.Client, clientID, clientSecret string) PlatformAPI {
 	return PlatformAPI{
-		myInvoisEndpoint: endpoint,
-		httpClient:       httpClient,
-		clientID:         clientID,
-		clientSecret:     clientSecret,
+		baseURL:      baseURL,
+		httpClient:   httpClient,
+		clientID:     clientID,
+		clientSecret: clientSecret,
 	}
 }
 
@@ -140,7 +140,7 @@ func decodeSegment(seg string) ([]byte, error) {
 }
 
 func (p *PlatformAPI) login(onbehalfof string) (*OAuth2Token, error) {
-	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.login)
+	endpoint := p.baseURL.API.ResolveReference(PlatformEndpoints.login)
 	form := url.Values{}
 	form.Add("client_id", p.clientID)
 	form.Add("client_secret", p.clientSecret)
@@ -192,7 +192,7 @@ func (p *PlatformAPI) LoginAsIntermediaries(onbehalfof string) (*OAuth2Token, er
 // GetAllDocumentTypes retrieves all document types
 // api signature: GET /api/v1.0/documenttypes
 func (p *PlatformAPI) GetAllDocumentTypes(accessToken string) (*DocumentTypes, error) {
-	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getAllDocumentTypes)
+	endpoint := p.baseURL.API.ResolveReference(PlatformEndpoints.getAllDocumentTypes)
 	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
@@ -221,7 +221,7 @@ func (p *PlatformAPI) GetAllDocumentTypes(accessToken string) (*DocumentTypes, e
 // GetDocumentType retrieves a document type by id
 // api signature: GET /api/v1.0/documenttypes/{id}
 func (p *PlatformAPI) GetDocumentType(accessToken string, id int) (*DocumentType, error) {
-	endpoint := p.myInvoisEndpoint.ResolveReference(PlatformEndpoints.getDocumentType)
+	endpoint := p.baseURL.API.ResolveReference(PlatformEndpoints.getDocumentType)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%d", id)
 	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
 	if err != nil {

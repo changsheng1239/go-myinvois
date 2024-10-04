@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -548,4 +549,27 @@ func TestRsaSHA256Sign(t *testing.T) {
 	signature, err := rsa.SignPKCS1v15(nil, c.privKey, crypto.SHA256, digestDecoded)
 	assert.Nil(err)
 	t.Log(base64.StdEncoding.EncodeToString(signature))
+}
+
+func TestPublicLink(t *testing.T) {
+	c := setupEInvoiceTest()
+	assert := assert.New(t)
+
+	acceptedDocument := submitAndAssert(t, c, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
+
+	if currentUUID == "" {
+		t.Skip("No document to get details")
+	}
+
+	details, err := waitForDocumentStatus(t, c, currentUUID, stDocumentValid)
+	assert.Nil(err)
+	assert.NotNil(details)
+
+	pLink := c.PublicLink(details.UUID, details.LongID)
+	t.Log("Public link: ", pLink)
+
+	u, err := url.Parse(pLink)
+	assert.Nil(err)
+	assert.Equal(fmt.Sprintf("/%s/share/%s", details.UUID, details.LongID), u.Path)
 }

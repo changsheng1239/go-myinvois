@@ -23,19 +23,16 @@ const (
 	defaultScope     = "InvoicingAPI"
 )
 
+type MyInvoisBaseURL struct {
+	API    *url.URL
+	Portal *url.URL
+}
+
 type platformEndpoints struct {
 	login               *url.URL
 	getAllDocumentTypes *url.URL
 	getDocumentType     *url.URL
 }
-
-var (
-	PlatformEndpoints = &platformEndpoints{
-		login:               &url.URL{Path: loginEndpoint},
-		getAllDocumentTypes: &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
-		getDocumentType:     &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
-	}
-)
 
 type einvoiceEndpoints struct {
 	validateTaxpayerTIN *url.URL
@@ -45,6 +42,34 @@ type einvoiceEndpoints struct {
 }
 
 var (
+	SandboxBaseURL = MyInvoisBaseURL{
+		API: &url.URL{
+			Scheme: "https",
+			Host:   "preprod-api.myinvois.hasil.gov.my",
+		},
+		Portal: &url.URL{
+			Scheme: "https",
+			Host:   "preprod.myinvois.hasil.gov.my",
+		},
+	}
+
+	ProdBaseURL = MyInvoisBaseURL{
+		API: &url.URL{
+			Scheme: "https",
+			Host:   "api.myinvois.hasil.gov.my",
+		},
+		Portal: &url.URL{
+			Scheme: "https",
+			Host:   "myinvois.hasil.gov.my",
+		},
+	}
+
+	PlatformEndpoints = &platformEndpoints{
+		login:               &url.URL{Path: loginEndpoint},
+		getAllDocumentTypes: &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
+		getDocumentType:     &url.URL{Path: apiPrefixV10 + documentTypesEndpoint},
+	}
+
 	EinvoiceEndpoints = &einvoiceEndpoints{
 		validateTaxpayerTIN: &url.URL{Path: apiPrefixV10 + validateTaxpayerTinEndpoint},
 		submitDocuments:     &url.URL{Path: apiPrefixV10 + submitDocumentsEndpoint},

@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -47,13 +46,12 @@ type ClientOption struct {
 }
 
 func newClient(opt ClientOption) *Client {
-	var apiURL string
+	var baseURL MyInvoisBaseURL
 	if opt.Environment == "" || opt.Environment == Sandbox {
-		apiURL = DefaultSandboxURL
+		baseURL = SandboxBaseURL
 	} else {
-		apiURL = DefaultProductionURL
+		baseURL = ProdBaseURL
 	}
-	u, _ := url.Parse(apiURL)
 
 	// create a httpClient with timeout
 	httpClient := &http.Client{
@@ -71,8 +69,8 @@ func newClient(opt ClientOption) *Client {
 	}
 
 	c := &Client{
-		PlatformAPI: newPlatformClient(u, httpClient, opt.ClientID, opt.ClientSecret),
-		EInvoiceAPI: newEInvoiceClient(u, httpClient, *certWrapper, mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
+		PlatformAPI: newPlatformClient(baseURL, httpClient, opt.ClientID, opt.ClientSecret),
+		EInvoiceAPI: newEInvoiceClient(baseURL, httpClient, *certWrapper, mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
 	}
 
 	return c

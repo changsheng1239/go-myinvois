@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -29,18 +28,18 @@ var (
 )
 
 type EInvoiceAPI struct {
-	myInvoisEndpoint *url.URL
-	httpClient       *http.Client
-	cert             x509CertWrapper
-	privKey          *rsa.PrivateKey
+	baseURL    MyInvoisBaseURL
+	httpClient *http.Client
+	cert       x509CertWrapper
+	privKey    *rsa.PrivateKey
 }
 
-func newEInvoiceClient(endpoint *url.URL, httpClient *http.Client, cert x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
+func newEInvoiceClient(baseURL MyInvoisBaseURL, httpClient *http.Client, cert x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
 	return EInvoiceAPI{
-		myInvoisEndpoint: endpoint,
-		httpClient:       httpClient,
-		cert:             cert,
-		privKey:          pk,
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		cert:       cert,
+		privKey:    pk,
 	}
 }
 
@@ -158,7 +157,7 @@ const (
 // ValidateTaxpayerTIN validates the taxpayer TIN
 // api signature: GET /api/v1.0/taxpayer/validate/{tin}?idType={idType}&idValue={idValue}
 func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue string) (bool, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.validateTaxpayerTIN)
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.validateTaxpayerTIN)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s", tin)
 
 	q := endpoint.Query()
@@ -196,7 +195,7 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue stri
 // Support JSON format only
 // api signature: POST /api/v1.0/documentsubmissions/
 func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.submitDocuments)
 
 	var ds DocumentSubmission
 	for _, doc := range docs {
@@ -280,7 +279,7 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 // Support XML format without Digital Signature (Invoice v1.0)
 // api signature: POST /api/v1.0/documentsubmissions/
 func (e *EInvoiceAPI) SubmitRawXML(accessToken string, docXML []byte) (*DocumentSubmissionResponse, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.submitDocuments)
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.submitDocuments)
 
 	h := sha256.New()
 	h.Write(docXML)
@@ -354,7 +353,7 @@ func (e *EInvoiceAPI) SubmitRawXML(accessToken string, docXML []byte) (*Document
 // GetDocumentDetails retrieves the status & details of a document
 // api signature: GET /api/v1.0/documents/{uuid}/details
 func (e *EInvoiceAPI) GetDocumentDetails(accessToken, uuid string) (*GetDocumentDetailsResponse, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getDocuments)
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.getDocuments)
 	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s/details", uuid)
 
 	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
@@ -393,7 +392,7 @@ func (e *EInvoiceAPI) RejectDocument(accessToken, uuid, reason string) (*UpdateS
 }
 
 func (e *EInvoiceAPI) updateDocumentStatus(accessToken, uuid, status, reason string) (*UpdateStatusResponse, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.updateDocumentStatus(uuid))
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.updateDocumentStatus(uuid))
 
 	body := UpdateStatusRequest{
 		Status: status,
@@ -459,10 +458,16 @@ func (e *EInvoiceAPI) updateDocumentStatus(accessToken, uuid, status, reason str
 //	receiverTin={receiverTin}&
 //	issuerTin={issuerTin}
 func (e *EInvoiceAPI) GetRecentDocuments(limit int) ([]GetDocumentDetailsResponse, error) {
-	endpoint := e.myInvoisEndpoint.ResolveReference(EinvoiceEndpoints.getRecentDocuments)
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.getRecentDocuments)
 
 	q := endpoint.Query()
 	q.Set("pageSize", fmt.Sprintf("%d", limit))
 
 	return nil, nil
+}
+
+// PublicLink returns the public link for a document
+// {envbaseurl}/uuid-of-document/share/longid
+func (e *EInvoiceAPI) PublicLink(uuid, longid string) string {
+	return fmt.Sprintf("%s/%s/share/%s", e.baseURL.Portal.String(), uuid, longid)
 }
