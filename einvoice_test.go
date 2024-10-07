@@ -467,6 +467,28 @@ func TestRequiredFieldsInvoice(t *testing.T) {
 	}
 }
 
+func TestGetDocument(t *testing.T) {
+	client := setupEInvoiceTest()
+	assert := assert.New(t)
+
+	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
+	currentUUID := acceptedDocument.UUID
+
+	if currentUUID == "" {
+		t.Skip("No document to get details")
+	}
+
+	time.Sleep(5 * time.Second)
+	token := login(client)
+	details, err := client.GetDocument(token.AccessToken, currentUUID)
+	assert.Nil(err)
+	assert.NotNil(details)
+
+	b, err := json.MarshalIndent(details, "", "  ")
+	assert.Nil(err)
+	t.Log(string(b))
+}
+
 func TestGetDocumentDetails(t *testing.T) {
 	client := setupEInvoiceTest()
 	assert := assert.New(t)

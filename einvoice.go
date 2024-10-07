@@ -94,6 +94,7 @@ type GetDocumentDetailsResponse struct {
 	ValidationResults     ValidationResults `json:"validationResults"`
 	InternalID            string            `json:"internalId"`
 	DateTimeIssued        time.Time         `json:"dateTimeIssued"`
+	Document              json.RawMessage   `json:"document"`
 }
 
 type ValidationResults struct {
@@ -342,6 +343,35 @@ func (e *EInvoiceAPI) SubmitRawXML(accessToken string, docXML []byte) (*Document
 	}
 
 	var r DocumentSubmissionResponse
+	err = json.NewDecoder(res.Body).Decode(&r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+	}
+
+	return &r, nil
+}
+
+// GetDocumentDetails retrieves the status & details of a document
+// api signature: GET /api/v1.0/documents/{uuid}/raw
+func (e *EInvoiceAPI) GetDocument(accessToken, uuid string) (*GetDocumentDetailsResponse, error) {
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.getDocuments)
+	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s/raw", uuid)
+
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
+	}
+
+	res, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
+	}
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
+	}
+
+	var r GetDocumentDetailsResponse
 	err = json.NewDecoder(res.Body).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
