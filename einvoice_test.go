@@ -21,153 +21,12 @@ import (
 )
 
 const (
-	fileTestInvoice  = "testdata/test.json"
-	fileValidInvoice = "testdata/invoice-valid.json"
-	fileValidConsoIV = "testdata/conso-invoice-valid.json"
+	fileTestInvoice = "testdata/test.json"
+	//fileValidInvoice = "testdata/invoice-valid-personal.json"
+	fileValidInvoice             = "testdata/invoice-valid.json"
+	fileValidInvoiceForeignBuyer = "testdata/invoice-valid-foreign-buyer.json"
+	fileValidConsoIV             = "testdata/conso-invoice-valid.json"
 )
-
-func setupEInvoiceTest() *Client {
-	err := godotenv.Load(".env")
-	if err != nil {
-		panic(err)
-	}
-
-	cert, err := os.ReadFile(os.Getenv("CERT_PATH"))
-	if err != nil {
-		panic(err)
-	}
-	key, err := os.ReadFile(os.Getenv("PKEY_PATH"))
-	if err != nil {
-		panic(err)
-	}
-
-	return NewClient(ClientOption{
-		// Environment: Production,
-		Environment:  Sandbox,
-		Timeout:      DefaultTimeout,
-		ClientID:     os.Getenv("CLIENT_ID"),
-		ClientSecret: os.Getenv("CLIENT_SECRET"),
-		Cert:         cert,
-		PrivKey:      key,
-		PrivKeyPass:  []byte(os.Getenv("PKEY_PASSWORD")),
-	})
-}
-
-func loadInvoice(filename string) Ubl21Invoice {
-	b, err := os.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-
-	var ublInvoice Ubl21Invoice
-	err = json.Unmarshal(b, &ublInvoice)
-	if err != nil {
-		panic(err)
-	}
-
-	ublInvoice.Invoice[0].ID[0].Empty = uuid.NewString()
-	ublInvoice.Invoice[0].IssueDate[0].Empty = time.Now().Format("2006-01-02")
-	ublInvoice.Invoice[0].IssueTime[0].Empty = time.Now().UTC().Format("15:04:05Z")
-
-	return ublInvoice
-}
-
-func loadRawXML(filename string) []byte {
-	b, err := os.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-
-	doc, err := xmlquery.Parse(bytes.NewReader(b))
-	if err != nil {
-		panic(err)
-	}
-
-	// set UUID and IssueDate
-	if uuidNode := xmlquery.FindOne(doc, "//cbc:ID"); uuidNode != nil {
-		uuidNode.FirstChild.Data = uuid.NewString()
-	}
-	if issueDateNode := xmlquery.FindOne(doc, "//cbc:IssueDate"); issueDateNode != nil {
-		issueDateNode.FirstChild.Data = time.Now().Format("2006-01-02")
-	}
-	if issueTimeNode := xmlquery.FindOne(doc, "//cbc:IssueTime"); issueTimeNode != nil {
-		issueTimeNode.FirstChild.Data = time.Now().UTC().Format("15:04:05Z")
-	}
-
-	return []byte(doc.OutputXML(true))
-}
-
-func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
-	token := login(client)
-	assert := assert.New(t)
-	require := require.New(t)
-
-	startTime := time.Now()
-	for tick := range time.Tick(2 * time.Second) {
-		t.Log("Getting document details for", uuid)
-		res, err := client.GetDocumentDetails(token.AccessToken, uuid)
-		// if document not found, continue polling in case LHDN server is having delay
-		if err != nil {
-			if strings.Contains(err.Error(), "404") {
-				continue
-			}
-			return nil, err
-		}
-
-		t.Logf("Document %s's current status: %s, want: %s\n", uuid, res.Status, status)
-
-		isDocumentSubmitted := (res.Status != stDocumentPending && res.Status != stDocumentSubmitted)
-		// if status is what we want or not pending/submitted, return
-		if isDocumentSubmitted {
-			b, err := json.MarshalIndent(res, "", "  ")
-			assert.Nil(err)
-
-			require.Equal(status, res.Status,
-				"Document status mismatch, want: %s, got: %s, body: \n%s",
-				status, res.Status, string(b),
-			)
-			return res, nil
-		} else if tick.After(startTime.Add(30 * time.Second)) {
-			break
-		}
-	}
-	return nil, fmt.Errorf("Timeout waiting for document status %s", status)
-}
-
-func printSubmissionResponse(t *testing.T, res *DocumentSubmissionResponse) {
-	if res != nil {
-		for _, i := range res.AcceptedDocuments {
-			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
-		}
-
-		for _, i := range res.RejectedDocuments {
-			t.Log("Rejected:", i.InvoiceCodeNumber)
-			for _, e := range i.Error.Details {
-				t.Log("Error:", e.Code, e.Message)
-			}
-		}
-	}
-}
-
-func submitDocuments(client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
-	token := login(client)
-	res, err := client.SubmitDocuments(token.AccessToken, invoices)
-
-	return res, err
-}
-
-func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDocument {
-	require := require.New(t)
-
-	res, err := submitDocuments(client, []Ubl21Invoice{doc})
-	require.Nil(err)
-	require.NotNil(res)
-	printSubmissionResponse(t, res)
-	require.Equal(1, len(res.AcceptedDocuments))
-	require.Equal(0, len(res.RejectedDocuments))
-
-	return res.AcceptedDocuments[0]
-}
 
 func TestValidateTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
@@ -216,6 +75,46 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 	}
 }
 
+func TestSearchTaxpayerTIN(t *testing.T) {
+	client := setupEInvoiceTest()
+	token := login(client)
+	assert := assert.New(t)
+
+	var tests = []struct {
+		idType       string
+		idValue      string
+		taxpayerName string
+		want         string
+	}{
+		{"BRN", "200601007071", "", "C20127289100"},
+		{"NRIC", "470810075095", "", "IG2012015100"},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("TIN for %s:%s", test.idType, test.idValue), func(t *testing.T) {
+			tin, err := client.SearchTaxpayerTIN(token.AccessToken, test.idType, test.idValue, test.taxpayerName)
+			assert.Equal(test.want, tin)
+			assert.Nil(err)
+		})
+	}
+
+	var errorTests = []struct {
+		idType       string
+		idValue      string
+		taxpayerName string
+		expectedErr  error
+	}{
+		{"", "", "MXXX_XXXXBERHAD", ErrMultipleTinMatched},
+	}
+
+	for _, test := range errorTests {
+		t.Run(fmt.Sprintf("Error test for %s:%s", test.idType, test.idValue), func(t *testing.T) {
+			_, err := client.SearchTaxpayerTIN(token.AccessToken, test.idType, test.idValue, test.taxpayerName)
+			assert.ErrorIs(err, test.expectedErr, "expected error mismatch")
+		})
+	}
+}
+
 func TestSubmitValidDocument(t *testing.T) {
 	client := setupEInvoiceTest()
 
@@ -231,6 +130,11 @@ func TestSubmitValidDocument(t *testing.T) {
 		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
 	})
 
+	t.Run("Submit valid invoice with foreign buyer", func(t *testing.T) {
+		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoiceForeignBuyer))
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+	})
+
 	t.Run("Submit valid consolidated invoice", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidConsoIV))
 		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
@@ -242,14 +146,10 @@ func TestSubmitRawXML(t *testing.T) {
 	require := require.New(t)
 	token := login(client)
 
-	docXML := loadRawXML("testdata/invoice-valid.xml")
-	res, err := client.SubmitRawXML(token.AccessToken, docXML)
-	require.Nil(err)
-	require.NotNil(res)
-
 	t.Run("Submit raw XML document", func(t *testing.T) {
 		iv := loadRawXML("testdata/invoice-valid.xml")
 		res, err := client.SubmitRawXML(token.AccessToken, iv)
+		printSubmissionResponse(t, res)
 		require.Nil(err)
 		require.NotNil(res)
 		if res != nil {
@@ -594,4 +494,147 @@ func TestPublicLink(t *testing.T) {
 	u, err := url.Parse(pLink)
 	assert.Nil(err)
 	assert.Equal(fmt.Sprintf("/%s/share/%s", details.UUID, details.LongID), u.Path)
+}
+
+func setupEInvoiceTest() *Client {
+	err := godotenv.Load(".env")
+	if err != nil {
+		panic(err)
+	}
+
+	cert, err := os.ReadFile(os.Getenv("CERT_PATH"))
+	if err != nil {
+		panic(err)
+	}
+	key, err := os.ReadFile(os.Getenv("PKEY_PATH"))
+	if err != nil {
+		panic(err)
+	}
+
+	return NewClient(ClientOption{
+		//Environment: Production,
+		Environment:  Sandbox,
+		Timeout:      DefaultTimeout,
+		ClientID:     os.Getenv("CLIENT_ID"),
+		ClientSecret: os.Getenv("CLIENT_SECRET"),
+		Cert:         cert,
+		PrivKey:      key,
+		PrivKeyPass:  []byte(os.Getenv("PKEY_PASSWORD")),
+	})
+}
+
+func loadInvoice(filename string) Ubl21Invoice {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+
+	var ublInvoice Ubl21Invoice
+	err = json.Unmarshal(b, &ublInvoice)
+	if err != nil {
+		panic(err)
+	}
+
+	ublInvoice.Invoice[0].ID[0].Empty = uuid.NewString()
+	ublInvoice.Invoice[0].IssueDate[0].Empty = time.Now().Format("2006-01-02")
+	ublInvoice.Invoice[0].IssueTime[0].Empty = time.Now().UTC().Format("15:04:05Z")
+
+	return ublInvoice
+}
+
+func loadRawXML(filename string) []byte {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+
+	doc, err := xmlquery.Parse(bytes.NewReader(b))
+	if err != nil {
+		panic(err)
+	}
+
+	// set UUID and IssueDate
+	if uuidNode := xmlquery.FindOne(doc, "//cbc:ID"); uuidNode != nil {
+		uuidNode.FirstChild.Data = uuid.NewString()
+	}
+	if issueDateNode := xmlquery.FindOne(doc, "//cbc:IssueDate"); issueDateNode != nil {
+		issueDateNode.FirstChild.Data = time.Now().Format("2006-01-02")
+	}
+	if issueTimeNode := xmlquery.FindOne(doc, "//cbc:IssueTime"); issueTimeNode != nil {
+		issueTimeNode.FirstChild.Data = time.Now().UTC().Format("15:04:05Z")
+	}
+
+	return []byte(doc.OutputXML(true))
+}
+
+func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
+	token := login(client)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	startTime := time.Now()
+	for tick := range time.Tick(2 * time.Second) {
+		t.Log("Getting document details for", uuid)
+		res, err := client.GetDocumentDetails(token.AccessToken, uuid)
+		// if document not found, continue polling in case LHDN server is having delay
+		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				continue
+			}
+			return nil, err
+		}
+
+		t.Logf("Document %s's current status: %s, want: %s, longid: %s\n", uuid, res.Status, status, res.LongID)
+
+		isDocumentSubmitted := (res.Status != stDocumentPending && res.Status != stDocumentSubmitted)
+		// if status is what we want or not pending/submitted, return
+		if isDocumentSubmitted {
+			b, err := json.MarshalIndent(res, "", "  ")
+			assert.Nil(err)
+
+			require.Equal(status, res.Status,
+				"Document status mismatch, want: %s, got: %s, body: \n%s",
+				status, res.Status, string(b),
+			)
+			return res, nil
+		} else if tick.After(startTime.Add(30 * time.Second)) {
+			break
+		}
+	}
+	return nil, fmt.Errorf("Timeout waiting for document status %s", status)
+}
+
+func printSubmissionResponse(t *testing.T, res *DocumentSubmissionResponse) {
+	if res != nil {
+		for _, i := range res.AcceptedDocuments {
+			t.Log("Accepted:", i.UUID, i.InvoiceCodeNumber)
+		}
+
+		for _, i := range res.RejectedDocuments {
+			t.Log("Rejected:", i.InvoiceCodeNumber)
+			for _, e := range i.Error.Details {
+				t.Log("Error:", e.Code, e.Message)
+			}
+		}
+	}
+}
+
+func submitDocuments(client *Client, invoices []Ubl21Invoice) (*DocumentSubmissionResponse, error) {
+	token := login(client)
+	res, err := client.SubmitDocuments(token.AccessToken, invoices)
+
+	return res, err
+}
+
+func submitAndAssert(t *testing.T, client *Client, doc Ubl21Invoice) AcceptedDocument {
+	require := require.New(t)
+
+	res, err := submitDocuments(client, []Ubl21Invoice{doc})
+	require.Nil(err)
+	require.NotNil(res)
+	printSubmissionResponse(t, res)
+	require.Equal(1, len(res.AcceptedDocuments))
+	require.Equal(0, len(res.RejectedDocuments))
+
+	return res.AcceptedDocuments[0]
 }

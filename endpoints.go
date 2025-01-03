@@ -14,6 +14,7 @@ const (
 
 	// einvoice
 	validateTaxpayerTinEndpoint  = "/taxpayer/validate"
+	searchTaxpayerTinEndpoint    = "/taxpayer/search/tin"
 	submitDocumentsEndpoint      = "/documentsubmissions"
 	getDocumentsEndpoint         = "/documents"
 	updateDocumentStatusEndpoint = "/documents/state/%s/state"
@@ -36,6 +37,7 @@ type platformEndpoints struct {
 
 type einvoiceEndpoints struct {
 	validateTaxpayerTIN *url.URL
+	searchTaxpayerTIN   *url.URL
 	submitDocuments     *url.URL
 	getDocuments        *url.URL
 	getRecentDocuments  *url.URL
@@ -72,6 +74,7 @@ var (
 
 	EinvoiceEndpoints = &einvoiceEndpoints{
 		validateTaxpayerTIN: &url.URL{Path: apiPrefixV10 + validateTaxpayerTinEndpoint},
+		searchTaxpayerTIN:   &url.URL{Path: apiPrefixV10 + searchTaxpayerTinEndpoint},
 		submitDocuments:     &url.URL{Path: apiPrefixV10 + submitDocumentsEndpoint},
 		getDocuments:        &url.URL{Path: apiPrefixV10 + getDocumentsEndpoint},
 		getRecentDocuments:  &url.URL{Path: apiPrefixV10 + getRecentDocumentsEndpoint},

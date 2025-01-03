@@ -9,22 +9,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/antchfx/xmlquery"
 )
 
 var (
-	ErrInvalidInput        = errors.New("invalid input")
-	ErrTinMismatch         = errors.New("ID value and TIN mismatch")
-	ErrMarshalFailed       = errors.New("failed to marshal struct")
-	ErrIncorrectSubmitter  = errors.New("incorrect submitter")
-	ErrDuplicateSubmission = errors.New("duplicate submission, please retry later")
-	ErrDecodeCertificate   = errors.New("failed to decode certificate")
-	ErrParseCertificate    = errors.New("failed to parse certificate")
-	ErrSignFailed          = errors.New("failed to sign document")
+	ErrAuthenticatedTinMismatch = errors.New("The authenticated TIN and documents TIN is not matching")
+	ErrMultipleTinMatched       = errors.New("Search criteria in not conclusive and more than one TIN can be found to match the search criteria provided, please revise the search criteria.")
+	ErrInvalidInput             = errors.New("invalid input")
+	ErrTinMismatch              = errors.New("ID value and TIN mismatch")
+	ErrMarshalFailed            = errors.New("failed to marshal struct")
+	ErrIncorrectSubmitter       = errors.New("incorrect submitter")
+	ErrDuplicateSubmission      = errors.New("duplicate submission, please retry later")
+	ErrDecodeCertificate        = errors.New("failed to decode certificate")
+	ErrParseCertificate         = errors.New("failed to parse certificate")
+	ErrSignFailed               = errors.New("failed to sign document")
 )
 
 type EInvoiceAPI struct {
@@ -192,6 +194,69 @@ func (e *EInvoiceAPI) ValidateTaxpayerTIN(accessToken, tin, idType, idValue stri
 	return true, nil
 }
 
+// SearchTaxpayerTIN searches the taxpayer TIN
+// api signature: GET /api/v1.0/taxpayer/search/tin?idType={idType}&idValue={idValue}&taxpayerName={taxpayerName}
+func (e *EInvoiceAPI) SearchTaxpayerTIN(accessToken, idType, idValue, taxpayerName string) (string, error) {
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.searchTaxpayerTIN)
+
+	q := endpoint.Query()
+	if idType != "" && idValue != "" {
+		q.Set("idType", idType)
+		q.Set("idValue", idValue)
+	} else if taxpayerName != "" {
+		q.Set("taxpayerName", taxpayerName)
+	} else {
+		return "", ErrInvalidInput
+	}
+	endpoint.RawQuery = q.Encode()
+
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
+	}
+
+	res, err := e.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
+	}
+	defer res.Body.Close()
+
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+	}
+
+	if res.StatusCode != 200 {
+		var r string
+		switch res.StatusCode {
+		case 400:
+			err = json.Unmarshal(b, &r)
+			if err != nil {
+				return "", fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+			}
+			if r == ErrMultipleTinMatched.Error() {
+				return "", ErrMultipleTinMatched
+			}
+			return "", fmt.Errorf("%w: %v", ErrInvalidInput, res.Status)
+		case 404:
+			// 404 means the TIN & ID combination does not match
+			return "", nil
+		default:
+			return "", fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
+		}
+	}
+
+	var r struct {
+		TIN string `json:"tin"`
+	}
+	err = json.Unmarshal(b, &r)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+	}
+
+	return r.TIN, nil
+}
+
 // SubmitDocuments submits documents to the LHDN MyInvois API with Digital Signature
 // Support JSON format only
 // api signature: POST /api/v1.0/documentsubmissions/
@@ -216,8 +281,6 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrMarshalFailed, err)
 		}
-
-		_ = os.WriteFile("response/signed.json", b, 0644)
 
 		h := sha256.New()
 		h.Write(b)
