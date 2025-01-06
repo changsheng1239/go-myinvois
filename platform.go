@@ -60,7 +60,7 @@ type TokenPayload struct {
 	SSID              string   `json:"SSId"`
 	PreferredUsername string   `json:"preferred_username"`
 	TaxID             string   `json:"TaxId"`
-	TaxTin            string   `json:"TaxTin"`
+	TaxpayerTIN       string   `json:"TaxpayerTIN"`
 	ProfID            string   `json:"ProfId"`
 	IsTaxAdmin        string   `json:"IsTaxAdmin"`
 	IsSystem          string   `json:"IsSystem"`
