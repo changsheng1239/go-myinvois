@@ -19,6 +19,7 @@ const (
 	getDocumentsEndpoint         = "/documents"
 	updateDocumentStatusEndpoint = "/documents/state/%s/state"
 	getRecentDocumentsEndpoint   = "/documents/recent"
+	taxpayerQrCodeInfoEndpoint   = "/taxpayers/qrcodeinfo"
 
 	defaultGrantType = "client_credentials"
 	defaultScope     = "InvoicingAPI"
@@ -41,6 +42,7 @@ type einvoiceEndpoints struct {
 	submitDocuments     *url.URL
 	getDocuments        *url.URL
 	getRecentDocuments  *url.URL
+	taxpayerQrCodeInfo  *url.URL
 }
 
 var (
@@ -78,6 +80,7 @@ var (
 		submitDocuments:     &url.URL{Path: apiPrefixV10 + submitDocumentsEndpoint},
 		getDocuments:        &url.URL{Path: apiPrefixV10 + getDocumentsEndpoint},
 		getRecentDocuments:  &url.URL{Path: apiPrefixV10 + getRecentDocumentsEndpoint},
+		taxpayerQrCodeInfo:  &url.URL{Path: apiPrefixV10 + taxpayerQrCodeInfoEndpoint},
 	}
 )
 

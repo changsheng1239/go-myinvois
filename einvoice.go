@@ -148,6 +148,28 @@ type GetDocumentsOption struct {
 	IssuerTin          string
 }
 
+type TaxpayerInfo struct {
+	Name                          string `json:"name"`
+	TIN                           string `json:"tin"`
+	IDType                        string `json:"idType"`
+	IDNumber                      string `json:"idNumber"`
+	SST                           string `json:"sst"`
+	Email                         string `json:"email"`
+	ContactNumber                 string `json:"contactNumber"`
+	TTX                           string `json:"ttx"`
+	BusinessActivityDescriptionBM string `json:"businessActivityDescriptionBM"`
+	BusinessActivityDescriptionEN string `json:"businessActivityDescriptionEN"`
+	MSIC                          string `json:"msic"`
+	AddressLine0                  string `json:"addressLine0"`
+	AddressLine1                  string `json:"addressLine1"`
+	AddressLine2                  string `json:"addressLine2"`
+	PostalZone                    string `json:"postalZone"`
+	City                          string `json:"city"`
+	State                         string `json:"state"`
+	Country                       string `json:"country"`
+	GeneratedTimestamp            string `json:"generatedTimestamp"`
+}
+
 const (
 	stDocumentPending   = "Pending"
 	stDocumentSubmitted = "Submitted"
@@ -563,4 +585,31 @@ func (e *EInvoiceAPI) GetRecentDocuments(limit int) ([]GetDocumentDetailsRespons
 // {envbaseurl}/uuid-of-document/share/longid
 func (e *EInvoiceAPI) PublicLink(uuid, longid string) string {
 	return fmt.Sprintf("%s/%s/share/%s", e.baseURL.Portal.String(), uuid, longid)
+}
+
+// TaxpayerQrCode allows taxpayer’s ERP system to retrieve the information for a specific Taxpayer based on the Base64 formatted string obtained from scanning the respective QR code.
+// api signature: GET /api/v1.0/taxpayers/qrcodeinfo/{qrCodeText}
+func (e *EInvoiceAPI) TaxpayerQrCode(accessToken string, id string) (*TaxpayerInfo, error) {
+	endpoint := e.baseURL.API.ResolveReference(EinvoiceEndpoints.taxpayerQrCodeInfo)
+	endpoint.Path = endpoint.Path + fmt.Sprintf("/%s", id)
+
+	req, err := newRequestWithToken(accessToken, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNewHttpRequestFailed, err)
+	}
+	res, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("%w: %v", ErrHttpRequestFailed, res.Status)
+	}
+	var r TaxpayerInfo
+	err = json.NewDecoder(res.Body).Decode(&r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrReadBodyFailed, err)
+	}
+
+	return &r, nil
 }

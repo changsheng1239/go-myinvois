@@ -28,6 +28,10 @@ const (
 	fileValidConsoIV             = "testdata/conso-invoice-valid.json"
 )
 
+var (
+	taxpayerQR string
+)
+
 func TestValidateTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
 	token := login(client)
@@ -526,11 +530,36 @@ func TestPublicLink(t *testing.T) {
 	assert.Equal(fmt.Sprintf("/%s/share/%s", details.UUID, details.LongID), u.Path)
 }
 
+func TestTaxpayerQrCode(t *testing.T) {
+	c := setupEInvoiceTest()
+	token := login(c)
+	assert := assert.New(t)
+
+	t.Run("Get valid taxpayer QR code info", func(t *testing.T) {
+		taxpayerInfo, err := c.TaxpayerQrCode(token.AccessToken, taxpayerQR)
+		assert.Nil(err)
+		assert.NotNil(taxpayerInfo)
+		assert.NotEmpty(taxpayerInfo.Name)
+		assert.NotEmpty(taxpayerInfo.TIN)
+		assert.NotEmpty(taxpayerInfo.IDType)
+		assert.NotEmpty(taxpayerInfo.IDNumber)
+	})
+
+	t.Run("Get invalid taxpayer QR code info", func(t *testing.T) {
+		taxpayerInfo, err := c.TaxpayerQrCode(token.AccessToken, "123")
+		assert.NotNil(err)
+		assert.Contains(err.Error(), "404")
+		assert.Nil(taxpayerInfo)
+	})
+}
+
 func setupEInvoiceTest() *Client {
 	err := godotenv.Load(".env")
 	if err != nil {
 		panic(err)
 	}
+
+	taxpayerQR = os.Getenv("TAXPAYER_QR")
 
 	cert, err := os.ReadFile(os.Getenv("CERT_PATH"))
 	if err != nil {
