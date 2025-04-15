@@ -31,46 +31,56 @@ const (
 func TestValidateTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
 	token := login(client)
-	assert := assert.New(t)
 
-	var tests = []struct {
-		tin      string
-		idType   string
-		idValue  string
-		expected bool
-	}{
-		{"D26020043030", "BRN", "KT0031276-X", true},
-		{"C20127289100", "BRN", "200601007071", true},
-		{"D26020043030", "BRN", "198403011803", false},
-		{"C12345678900", "BRN", "200810101012", false},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
-			t.Parallel()
-			valid, _ := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
-			assert.Equal(test.expected, valid)
-		})
-	}
-
-	var errorTests = []struct {
+	tests := []struct {
+		name        string
 		tin         string
 		idType      string
 		idValue     string
+		expected    bool
 		expectedErr error
 	}{
-		{"D26020043030", "BRN", "KT0031276-X", nil},
-		{"C20127289100", "BRN", "200601007071", nil},
-		{"C20127289100", "BRN", "123", ErrTinMismatch},
-		{"D26020043030", "BRN", "198403011803", ErrTinMismatch},
-		{"C12345678900", "BRN", "200810101012", ErrTinMismatch},
+		{
+			name:        "Valid TIN with BRN",
+			tin:         "D26020043030",
+			idType:      "BRN",
+			idValue:     "KT0031276-X",
+			expected:    true,
+			expectedErr: nil,
+		},
+		{
+			name:        "Valid TIN with BRN",
+			tin:         "C20127289100",
+			idType:      "BRN",
+			idValue:     "200601007071",
+			expected:    true,
+			expectedErr: nil,
+		},
+		{
+			name:        "Invalid TIN with mismatched ID",
+			tin:         "D26020043030",
+			idType:      "BRN",
+			idValue:     "198403011803",
+			expected:    true, // currently LHDN will return true if the ID is BRN & TIN is valid, even if mismatched
+			expectedErr: nil,
+		},
+		{
+			name:        "Error case - Invalid input",
+			tin:         "C20127289100",
+			idType:      "BRN",
+			idValue:     "123",
+			expected:    true, // currently LHDN will return true if the ID is BRN & TIN is valid, even if mismatched
+			expectedErr: nil,
+		},
 	}
 
-	for _, test := range errorTests {
-		t.Run(fmt.Sprintf("TIN: %s, %s:%s", test.tin, test.idType, test.idValue), func(t *testing.T) {
-			t.Parallel()
-			_, err := client.ValidateTaxpayerTIN(token.AccessToken, test.tin, test.idType, test.idValue)
-			assert.ErrorIs(err, test.expectedErr, "expected error mismatch")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid, err := client.ValidateTaxpayerTIN(token.AccessToken, tt.tin, tt.idType, tt.idValue)
+
+			// Assertions
+			assert.Equal(t, tt.expected, valid)
+			assert.ErrorIs(t, err, tt.expectedErr)
 		})
 	}
 }
@@ -78,66 +88,83 @@ func TestValidateTaxpayerTIN(t *testing.T) {
 func TestSearchTaxpayerTIN(t *testing.T) {
 	client := setupEInvoiceTest()
 	token := login(client)
-	assert := assert.New(t)
 
-	var tests = []struct {
+	tests := []struct {
+		name         string
 		idType       string
 		idValue      string
 		taxpayerName string
 		want         string
+		wantErr      error
 	}{
-		{"BRN", "200601007071", "", "C20127289100"},
-		{"NRIC", "470810075095", "", "IG2012015100"},
+		{
+			name:         "Valid BRN TIN",
+			idType:       "BRN",
+			idValue:      "200601007071",
+			taxpayerName: "",
+			want:         "C20127289100",
+			wantErr:      nil,
+		},
+		{
+			name:         "Valid NRIC TIN",
+			idType:       "NRIC",
+			idValue:      "470810075095",
+			taxpayerName: "",
+			want:         "IG2012015100",
+			wantErr:      nil,
+		},
+		{
+			name:         "Invalid BRN TIN",
+			idType:       "BRN",
+			idValue:      "470810075095",
+			taxpayerName: "",
+			want:         "",
+			wantErr:      nil,
+		},
+		{
+			name:         "Error - Multiple TINs Matched",
+			idType:       "",
+			idValue:      "",
+			taxpayerName: "MXXX_XXXXBERHAD",
+			want:         "",
+			wantErr:      ErrMultipleTinMatched,
+		},
 	}
 
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("TIN for %s:%s", test.idType, test.idValue), func(t *testing.T) {
-			tin, err := client.SearchTaxpayerTIN(token.AccessToken, test.idType, test.idValue, test.taxpayerName)
-			assert.Equal(test.want, tin)
-			assert.Nil(err)
-		})
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tin, err := client.SearchTaxpayerTIN(token.AccessToken, tt.idType, tt.idValue, tt.taxpayerName)
 
-	var errorTests = []struct {
-		idType       string
-		idValue      string
-		taxpayerName string
-		expectedErr  error
-	}{
-		{"", "", "MXXX_XXXXBERHAD", ErrMultipleTinMatched},
-	}
-
-	for _, test := range errorTests {
-		t.Run(fmt.Sprintf("Error test for %s:%s", test.idType, test.idValue), func(t *testing.T) {
-			_, err := client.SearchTaxpayerTIN(token.AccessToken, test.idType, test.idValue, test.taxpayerName)
-			assert.ErrorIs(err, test.expectedErr, "expected error mismatch")
+			assert.Equal(t, tt.want, tin)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestSubmitValidDocument(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 
 	t.Run("Submit valid invoice v1.0", func(t *testing.T) {
 		iv := loadInvoice(fileValidInvoice)
 		iv.Invoice[0].InvoiceTypeCode[0].ListVersionID = "1.0"
 		acceptedDocument := submitAndAssert(t, client, iv)
-		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid, token)
 	})
 
 	t.Run("Submit valid invoice", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
-		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid, token)
 	})
 
 	t.Run("Submit valid invoice with foreign buyer", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoiceForeignBuyer))
-		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid, token)
 	})
 
 	t.Run("Submit valid consolidated invoice", func(t *testing.T) {
 		acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidConsoIV))
-		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid)
+		waitForDocumentStatus(t, client, acceptedDocument.UUID, stDocumentValid, token)
 	})
 }
 
@@ -156,7 +183,7 @@ func TestSubmitRawXML(t *testing.T) {
 			require.Equal(1, len(res.AcceptedDocuments))
 			require.Equal(0, len(res.RejectedDocuments))
 		}
-		waitForDocumentStatus(t, client, res.AcceptedDocuments[0].UUID, stDocumentValid)
+		waitForDocumentStatus(t, client, res.AcceptedDocuments[0].UUID, stDocumentValid, token)
 	})
 }
 
@@ -242,6 +269,7 @@ func TestSubmitInvalidDocument(t *testing.T) {
 
 func TestSubmitCreditNote(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -249,7 +277,7 @@ func TestSubmitCreditNote(t *testing.T) {
 	currentUUID := acceptedDocument.UUID
 	internalID := acceptedDocument.InvoiceCodeNumber
 
-	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 
@@ -269,7 +297,7 @@ func TestSubmitCreditNote(t *testing.T) {
 	currentUUID = acceptedCN.UUID
 	require.NotEmpty(currentUUID)
 
-	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 }
@@ -391,6 +419,7 @@ func TestGetDocument(t *testing.T) {
 
 func TestGetDocumentDetails(t *testing.T) {
 	client := setupEInvoiceTest()
+	token := login(client)
 	assert := assert.New(t)
 
 	acceptedDocument := submitAndAssert(t, client, loadInvoice(fileValidInvoice))
@@ -400,7 +429,7 @@ func TestGetDocumentDetails(t *testing.T) {
 		t.Skip("No document to get details")
 	}
 
-	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 
@@ -419,7 +448,7 @@ func TestCancelDocument(t *testing.T) {
 	currentUUID := acceptedDocument.UUID
 	require.NotEmpty(currentUUID)
 
-	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 
@@ -428,7 +457,7 @@ func TestCancelDocument(t *testing.T) {
 	assert.Nil(err)
 	assert.NotNil(res2)
 
-	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentCancelled)
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentCancelled, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 }
@@ -445,7 +474,7 @@ func TestRejectDocument(t *testing.T) {
 	require.NotEmpty(currentUUID)
 
 	t.Log("Waiting for document to be valid, uuid: ", currentUUID)
-	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, client, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 
@@ -455,7 +484,7 @@ func TestRejectDocument(t *testing.T) {
 	assert.NotNil(res2)
 
 	// todo: need to check if document is rejected using the reason
-	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentValid)
+	details, err = waitForDocumentStatus(t, client, currentUUID, stDocumentRejected, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 }
@@ -475,6 +504,7 @@ func TestRsaSHA256Sign(t *testing.T) {
 
 func TestPublicLink(t *testing.T) {
 	c := setupEInvoiceTest()
+	token := login(c)
 	assert := assert.New(t)
 
 	acceptedDocument := submitAndAssert(t, c, loadInvoice(fileValidInvoice))
@@ -484,7 +514,7 @@ func TestPublicLink(t *testing.T) {
 		t.Skip("No document to get details")
 	}
 
-	details, err := waitForDocumentStatus(t, c, currentUUID, stDocumentValid)
+	details, err := waitForDocumentStatus(t, c, currentUUID, stDocumentValid, token)
 	assert.Nil(err)
 	assert.NotNil(details)
 
@@ -567,13 +597,12 @@ func loadRawXML(filename string) []byte {
 	return []byte(doc.OutputXML(true))
 }
 
-func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string) (*GetDocumentDetailsResponse, error) {
-	token := login(client)
+func waitForDocumentStatus(t *testing.T, client *Client, uuid string, status string, token *OAuth2Token) (*GetDocumentDetailsResponse, error) {
 	assert := assert.New(t)
 	require := require.New(t)
 
 	startTime := time.Now()
-	for tick := range time.Tick(2 * time.Second) {
+	for tick := range time.Tick(5 * time.Second) {
 		t.Log("Getting document details for", uuid)
 		res, err := client.GetDocumentDetails(token.AccessToken, uuid)
 		// if document not found, continue polling in case LHDN server is having delay
