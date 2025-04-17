@@ -45,6 +45,15 @@ func login(p *Client) *OAuth2Token {
 	return token
 }
 
+func loginAsIntermediary(p *Client, onbehalfof string) *OAuth2Token {
+	token, err := p.LoginAsIntermediaries(onbehalfof)
+	if err != nil {
+		panic("login failed: " + err.Error())
+	}
+
+	return token
+}
+
 func TestDecodeToken(t *testing.T) {
 	assert := assert.New(t)
 
@@ -56,7 +65,6 @@ func TestDecodeToken(t *testing.T) {
 	assert.Equal(1720491106, token.Nbf)
 	assert.Equal(1720491106, token.Iat)
 	assert.Equal(1720494706, token.Exp)
-	// assert.Equal([]string{"InvoicingAPI", "https://preprod-identity.myinvois.hasil.gov.my/resources"}, token.Aud)
 	assert.Equal([]string{"InvoicingAPI"}, token.Scope)
 	assert.Equal("d67902d2-58a6-4b82-9e68-05b1e4635f03", token.ClientID)
 	assert.Equal("1", token.IsTaxRepres)
@@ -74,6 +82,39 @@ func TestDecodeToken(t *testing.T) {
 	assert.Equal("", token.NatID)
 }
 
+func validateToken(t *testing.T, accessTokenString string) {
+	assert := assert.New(t)
+
+	token, err := DecodeToken(accessTokenString)
+	assert.Nil(err)
+
+	b, err := json.MarshalIndent(token, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	t.Log(string(b))
+
+	assert.Greater(token.Nbf, 0)
+	assert.Greater(token.Iat, 0)
+	assert.Greater(token.Exp, 0)
+	assert.Equal("https://preprod-identity.myinvois.hasil.gov.my", token.Iss)
+	assert.Equal(CustomArray{"InvoicingAPI", "https://preprod-identity.myinvois.hasil.gov.my/resources"}, token.Aud)
+	assert.Equal([]string{"InvoicingAPI"}, token.Scope)
+	assert.NotEmpty(token.PreferredUsername)
+	assert.NotEmpty(token.TaxID)
+	assert.NotEmpty(token.TaxpayerTIN)
+	assert.NotEmpty(token.ProfID)
+	assert.NotEmpty(token.IsTaxAdmin)
+	assert.NotEmpty(token.IsSystem)
+	assert.NotEmpty(token.IntermedID)
+	assert.Equal(36, len(token.ClientID)) // uuid format d67902d2-58a6-4b82-9e68-05b1e4635f03
+	assert.Equal(36, len(token.SSID))
+	assert.Equal(1, len(token.IsTaxRepres))
+	assert.Equal(1, len(token.IsIntermediary))
+	assert.Equal(1, len(token.IntermedEnforced))
+	assert.Equal(token.TaxpayerTIN+":"+token.ClientID, token.Name)
+}
+
 func TestLoginAsTaxpayer(t *testing.T) {
 	p := setupPlatformTest()
 	assert := assert.New(t)
@@ -86,11 +127,7 @@ func TestLoginAsTaxpayer(t *testing.T) {
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
 
-	payload, err := DecodeToken(token.AccessToken)
-	assert.Nil(err)
-	b, err := json.MarshalIndent(payload, "", "  ")
-	assert.Nil(err)
-	t.Log(string(b))
+	validateToken(t, token.AccessToken)
 }
 
 func TestLoginAsIntermediary(t *testing.T) {
@@ -104,6 +141,8 @@ func TestLoginAsIntermediary(t *testing.T) {
 	assert.Equal("Bearer", token.TokenType)
 	assert.Equal(defaultScope, token.Scope)
 	assert.Equal(3600, token.ExpiresIn)
+
+	validateToken(t, token.AccessToken)
 }
 
 func TestGetAllDocumentTypes(t *testing.T) {
@@ -126,7 +165,7 @@ func TestGetDocumentType(t *testing.T) {
 	require.Nil(err)
 	require.NotEmpty(documentType)
 	assert.Equal(int64(1), documentType.ID)
-	assert.Equal(int64(1), documentType.InvoiceTypeCode)
+	assert.Equal("01", documentType.InvoiceTypeCode)
 	assert.Equal("Invoice", documentType.Description)
 	assert.Greater(len(documentType.DocumentTypeVersions), 0)
 	assert.NotEmpty(documentType.DocumentTypeVersions)

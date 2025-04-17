@@ -44,27 +44,59 @@ type OAuth2Token struct {
 }
 
 type TokenPayload struct {
-	Iss string `json:"iss"`
-	Nbf int    `json:"nbf"`
-	Iat int    `json:"iat"`
-	Exp int    `json:"exp"`
-	// Aud               []string `json:"aud"`
-	Scope             []string `json:"scope"`
-	ClientID          string   `json:"client_id"`
-	IsTaxRepres       string   `json:"IsTaxRepres"`
-	IsIntermediary    string   `json:"IsIntermediary"`
-	IntermedID        string   `json:"IntermedId"`
-	IntermedTIN       string   `json:"IntermedTIN"`
-	IntermedEnforced  string   `json:"IntermedEnforced"`
-	Name              string   `json:"name"`
-	SSID              string   `json:"SSId"`
-	PreferredUsername string   `json:"preferred_username"`
-	TaxID             string   `json:"TaxId"`
-	TaxpayerTIN       string   `json:"TaxpayerTIN"`
-	ProfID            string   `json:"ProfId"`
-	IsTaxAdmin        string   `json:"IsTaxAdmin"`
-	IsSystem          string   `json:"IsSystem"`
-	NatID             string   `json:"NatId"`
+	Iss               string      `json:"iss"`
+	Nbf               int         `json:"nbf"`
+	Iat               int         `json:"iat"`
+	Exp               int         `json:"exp"`
+	Aud               CustomArray `json:"aud"`
+	Scope             []string    `json:"scope"`
+	ClientID          string      `json:"client_id"`
+	IsTaxRepres       string      `json:"IsTaxRepres"`
+	IsIntermediary    string      `json:"IsIntermediary"`
+	IntermedID        string      `json:"IntermedId"`
+	IntermedTIN       string      `json:"IntermedTIN"`
+	IntermedEnforced  string      `json:"IntermedEnforced"`
+	Name              string      `json:"name"`
+	SSID              string      `json:"SSId"`
+	PreferredUsername string      `json:"preferred_username"`
+	TaxID             string      `json:"TaxId"`
+	TaxpayerTIN       string      `json:"TaxpayerTIN"`
+	Permissions       CustomArray `json:"Permissions"`
+	ProfID            string      `json:"ProfId"`
+	IsTaxAdmin        string      `json:"IsTaxAdmin"`
+	IsSystem          string      `json:"IsSystem"`
+	NatID             string      `json:"NatId"`
+}
+
+// CustomArray is a custom type to handle the case where the field will return a string when there is only one value
+// and a list of strings when there are multiple values
+// e.g. Permissions: "ViewDoc" vs Permissions: ["ViewDoc", "SubmitDoc"]
+type CustomArray []string
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+// to handle the case where the aud will return a string when there is only one audience
+func (a *CustomArray) UnmarshalJSON(data []byte) error {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	switch v := v.(type) {
+	case string:
+		*a = append(*a, v)
+	case []any:
+		for _, vv := range v {
+			if s, ok := vv.(string); ok {
+				*a = append(*a, s)
+			}
+		}
+	case nil:
+		*a = make(CustomArray, 0)
+	default:
+		return fmt.Errorf("field is neither a string nor a list of strings")
+	}
+
+	return nil
 }
 
 type DocumentTypes struct {
@@ -73,7 +105,7 @@ type DocumentTypes struct {
 
 type DocumentTypesResult struct {
 	ID                   int64                 `json:"id"`
-	InvoiceTypeCode      int64                 `json:"invoiceTypeCode"`
+	InvoiceTypeCode      string                `json:"invoiceTypeCode"`
 	Description          string                `json:"description"`
 	ActiveFrom           time.Time             `json:"activeFrom"`
 	ActiveTo             time.Time             `json:"activeTo"`
@@ -86,13 +118,13 @@ type DocumentTypeVersion struct {
 	Description   string    `json:"description"`
 	ActiveFrom    time.Time `json:"activeFrom"`
 	ActiveTo      time.Time `json:"activeTo"`
-	VersionNumber float64   `json:"versionNumber"`
+	VersionNumber string    `json:"versionNumber"`
 	Status        string    `json:"status"`
 }
 
 type DocumentType struct {
 	ID                   int64                 `json:"id"`
-	InvoiceTypeCode      int64                 `json:"invoiceTypeCode"`
+	InvoiceTypeCode      string                `json:"invoiceTypeCode"`
 	Description          string                `json:"description"`
 	ActiveFrom           time.Time             `json:"activeFrom"`
 	ActiveTo             time.Time             `json:"activeTo"`
