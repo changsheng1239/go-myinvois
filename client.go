@@ -28,9 +28,6 @@ const (
 type Environment string
 
 type Client struct {
-	ClientID     string
-	ClientSecret string
-	// AccessToken  *OAuth2Token
 	PlatformAPI
 	EInvoiceAPI
 }
