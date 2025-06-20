@@ -120,14 +120,24 @@ func TestLoginAsTaxpayer(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
-	token, err := p.LoginAsTaxpayer()
-	require.Nil(err)
-	require.NotEmpty(token.AccessToken)
-	assert.Equal("Bearer", token.TokenType)
-	assert.Equal(defaultScope, token.Scope)
-	assert.Equal(3600, token.ExpiresIn)
+	t.Run("Valid Login", func(t *testing.T) {
+		token, err := p.LoginAsTaxpayer()
+		require.Nil(err)
+		require.NotEmpty(token.AccessToken)
+		assert.Equal("Bearer", token.TokenType)
+		assert.Equal(defaultScope, token.Scope)
+		assert.Equal(3600, token.ExpiresIn)
+		validateToken(t, token.AccessToken)
+	})
 
-	validateToken(t, token.AccessToken)
+	t.Run("Invalid Login", func(t *testing.T) {
+		p.PlatformAPI.clientID = "invalid-client-id"
+
+		token, err := p.LoginAsTaxpayer()
+		require.NotNil(err)
+		require.ErrorIs(err, ErrInvalidCredential)
+		assert.Nil(token)
+	})
 }
 
 func TestLoginAsIntermediary(t *testing.T) {
@@ -135,14 +145,22 @@ func TestLoginAsIntermediary(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
-	token, err := p.LoginAsIntermediaries(os.Getenv("TIN"))
-	require.Nil(err)
-	require.NotEmpty(token.AccessToken)
-	assert.Equal("Bearer", token.TokenType)
-	assert.Equal(defaultScope, token.Scope)
-	assert.Equal(3600, token.ExpiresIn)
+	t.Run("Valid Login As Intermediary", func(t *testing.T) {
+		token, err := p.LoginAsIntermediaries(os.Getenv("TIN"))
+		require.Nil(err)
+		require.NotEmpty(token.AccessToken)
+		assert.Equal("Bearer", token.TokenType)
+		assert.Equal(defaultScope, token.Scope)
+		assert.Equal(3600, token.ExpiresIn)
+		validateToken(t, token.AccessToken)
+	})
 
-	validateToken(t, token.AccessToken)
+	t.Run("Invalid Login As Intermediary", func(t *testing.T) {
+		token, err := p.LoginAsIntermediaries("random-onbehalfof")
+		require.NotNil(err)
+		require.ErrorIs(err, ErrUnauthorizedIntermediary)
+		assert.Nil(token)
+	})
 }
 
 func TestGetAllDocumentTypes(t *testing.T) {

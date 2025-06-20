@@ -13,11 +13,13 @@ import (
 )
 
 var (
-	ErrInvalidTokenStructure = errors.New("invalid token structure")
-	ErrNewHttpRequestFailed  = errors.New("failed to create new http request")
-	ErrHttpRequestFailed     = errors.New("http request failed")
-	ErrReadBodyFailed        = errors.New("failed to read response body")
-	ErrRequestError          = errors.New("http request status not OK")
+	ErrInvalidTokenStructure    = errors.New("invalid token structure")
+	ErrNewHttpRequestFailed     = errors.New("failed to create new http request")
+	ErrHttpRequestFailed        = errors.New("http request failed")
+	ErrReadBodyFailed           = errors.New("failed to read response body")
+	ErrRequestError             = errors.New("http request status not OK")
+	ErrInvalidCredential        = errors.New("invalid client credentials")
+	ErrUnauthorizedIntermediary = errors.New("unauthorized intermediary")
 )
 
 type PlatformAPI struct {
@@ -196,6 +198,11 @@ func (p *PlatformAPI) login(onbehalfof string) (*OAuth2Token, error) {
 
 	if res.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(res.Body)
+		if strings.Contains(string(b), "invalid_client") {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidCredential, b)
+		} else if strings.Contains(string(b), "unauthorized_client") {
+			return nil, fmt.Errorf("%w: %s", ErrUnauthorizedIntermediary, b)
+		}
 		return nil, fmt.Errorf("%w: %s", ErrRequestError, b)
 	}
 
