@@ -2,6 +2,7 @@ package myinvois
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -612,4 +613,8 @@ func (e *EInvoiceAPI) TaxpayerQrCode(accessToken string, id string) (*TaxpayerIn
 	}
 
 	return &r, nil
+}
+
+func (e *EInvoiceAPI) SignDigest(digest []byte) ([]byte, error) {
+	return rsa.SignPKCS1v15(nil, e.privKey, crypto.SHA256, digest)
 }
