@@ -1,6 +1,7 @@
 package myinvois
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -20,21 +24,35 @@ var (
 	ErrRequestError             = errors.New("http request status not OK")
 	ErrInvalidCredential        = errors.New("invalid client credentials")
 	ErrUnauthorizedIntermediary = errors.New("unauthorized intermediary")
+	ErrKeyFuncFailed            = errors.New("keyfunc creation failed")
+	ErrJwtParseFailed           = errors.New("jwt parsing error")
+	ErrInvalidJwtIssuer         = errors.New("invalid jwt issuer")
+	ErrInvalidJwt               = errors.New("invalid jwt token")
 )
 
 type PlatformAPI struct {
 	baseURL      MyInvoisBaseURL
+	jwtIssuer    string
 	httpClient   *http.Client
 	clientID     string
 	clientSecret string
+	keyfunc      jwt.Keyfunc
 }
 
-func newPlatformClient(baseURL MyInvoisBaseURL, httpClient *http.Client, clientID, clientSecret string) PlatformAPI {
+func newPlatformClient(baseURL MyInvoisBaseURL, httpClient *http.Client, clientID, clientSecret, jwtIssuer string) PlatformAPI {
+	myInvoisJwksURL := "https://identity.myinvois.hasil.gov.my/.well-known/openid-configuration/jwks"
+	k, err := keyfunc.NewDefaultCtx(context.Background(), []string{myInvoisJwksURL})
+	if err != nil {
+		panic(fmt.Errorf("%w: %v", ErrKeyFuncFailed, err))
+	}
+
 	return PlatformAPI{
 		baseURL:      baseURL,
+		jwtIssuer:    jwtIssuer,
 		httpClient:   httpClient,
 		clientID:     clientID,
 		clientSecret: clientSecret,
+		keyfunc:      k.Keyfunc,
 	}
 }
 
@@ -285,4 +303,28 @@ func (p *PlatformAPI) GetDocumentType(accessToken string, id int) (*DocumentType
 	}
 
 	return &documentType, nil
+}
+
+// ValidateToken accepts bearer accessToken from MyInvois
+// returns the decoded TokenPayload if valid
+func (p *PlatformAPI) ValidateToken(accessToken string) (*TokenPayload, error) {
+	payload, err := DecodeToken(accessToken)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrJwtParseFailed, err)
+	}
+
+	if payload.Iss != p.jwtIssuer {
+		return nil, ErrInvalidJwtIssuer
+	}
+
+	token, err := jwt.Parse(accessToken, p.keyfunc)
+	if err != nil {
+		return nil, fmt.Errorf("%w, %v", ErrJwtParseFailed, err)
+	}
+
+	if !token.Valid {
+		return nil, ErrInvalidJwt
+	}
+
+	return payload, nil
 }

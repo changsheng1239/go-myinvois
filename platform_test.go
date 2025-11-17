@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
@@ -187,4 +188,33 @@ func TestGetDocumentType(t *testing.T) {
 	assert.Equal("Invoice", documentType.Description)
 	assert.Greater(len(documentType.DocumentTypeVersions), 0)
 	assert.NotEmpty(documentType.DocumentTypeVersions)
+}
+
+func TestValidateToken(t *testing.T) {
+	p := setupPlatformTest()
+	require := require.New(t)
+	// assert := assert.New(t)
+
+	t.Run("Valid Token", func(t *testing.T) {
+		token := login(p)
+		time.Sleep(1 * time.Second) // to avoid nbf delay issue
+		payload, err := p.ValidateToken(token.AccessToken)
+		require.Nil(err)
+		require.NotNil(payload)
+	})
+	t.Run("Invalid Token", func(t *testing.T) {
+		payload, err := p.ValidateToken("invalid-token")
+		require.NotNil(err)
+		require.ErrorIs(err, ErrJwtParseFailed)
+		require.Nil(payload)
+	})
+
+	t.Run("Invalid Issuer", func(t *testing.T) {
+		token := `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm15aW52b2lzLmhhc2lsLmdvdi5teSIsIm5iZiI6MTcyMDQ5MTEwNiwiaWF0IjoxNzIwNDkxMTA2LCJleHAiOjE3MjA0OTQ3MDYsImF1ZCI6WyJJbnZvaWNpbmdBUEkiLCJodHRwczovL2lkZW50aXR5Lm15aW52b2lzLmhhc2lsLmdvdi5teS9yZXNvdXJjZXMiXSwic2NvcGUiOlsiSW52b2ljaW5nQVBJIl0sImNsaWVudF9pZCI6ImQ2NzkwMmQyLTU4YTYtNGI4Mi05ZTY4LTA1YjFlNDYzNWYwMyIsIklzVGF4UmVwcmVzIjoiMSIsIklzSW50ZXJtZWRpYXJ5IjoiMCIsIkludGVybWVkSWQiOiIwIiwiSW50ZXJtZWRUSU4iOiIiLCJJbnRlcm1lZEVuZm9yY2VkIjoiMiIsIm5hbWUiOiJDMTIzNDU2Nzg5MDA6ZDY3OTAyZDItNThhNi00YjgyLTllNjgtMDViMWU0NjM1ZjAzIiwiU1NJZCI6ImFlY2E3ZjU4LWJmZDAtNDZlMy04NmFiLTVkNGEwNjJiN2U3MSIsInByZWZlcnJlZF91c2VybmFtZSI6IlRlc3QiLCJUYXhJZCI6IjEyMzQiLCJUYXhwYXllclRJTiI6IkMxMjM0NTY3ODkwMCIsIlByb2ZJZCI6IjEyMzQiLCJJc1RheEFkbWluIjoiMCIsIklzU3lzdGVtIjoiMSIsIk5hdElkIjoiIn0.pBviRf85QaO0SNkRobmuUFXg2V4gaFcnrO8xHxXuLcdLBuU-iFPWZ6xVbfvkHUwNdG3AKfzf74uPTjSGPeTqAzty8kpRjdRP6hd-CuLa1r5Xk6zB1hlhBiKNyOVUhoRotX4z98NwCBSJpNjY744hBWMu5_f41UEVM5BZuNlST1DpYWRIZtOLuY8dkdYOq7BnqvxP2dn7xJ4T5jKQh2mC0QDJAB9tKOQ9OPqG5TXik1TfOod6rPGuhRCaTgZmTIa1_RDDXPDf3yGLWXJ-mdCuwavGlho9hLELFW8pYfxE8YagyXt6_1H8LMf8EE_aX9bIApO-rSW9iAwOKK65_j6inQ`
+		payload, err := p.ValidateToken(token)
+		require.NotNil(err)
+		require.ErrorIs(err, ErrInvalidJwtIssuer)
+		require.Nil(payload)
+	})
+
 }

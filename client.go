@@ -17,6 +17,8 @@ import (
 const (
 	DefaultProductionURL = "https://api.myinvois.hasil.gov.my"
 	DefaultSandboxURL    = "https://preprod-api.myinvois.hasil.gov.my"
+	ProductionJwtIssuer  = "https://identity.myinvois.hasil.gov.my"
+	SandboxJwtIssuer     = "https://preprod-identity.myinvois.hasil.gov.my"
 	DefaultTimeout       = 30 * time.Second
 )
 
@@ -43,12 +45,7 @@ type ClientOption struct {
 }
 
 func newClient(opt ClientOption) *Client {
-	var baseURL MyInvoisBaseURL
-	if opt.Environment == "" || opt.Environment == Sandbox {
-		baseURL = SandboxBaseURL
-	} else {
-		baseURL = ProdBaseURL
-	}
+	baseURL, jwtIssuer := myInvoisEnvConfig(opt.Environment)
 
 	// create a httpClient with timeout
 	httpClient := &http.Client{
@@ -66,7 +63,7 @@ func newClient(opt ClientOption) *Client {
 	}
 
 	c := &Client{
-		PlatformAPI: newPlatformClient(baseURL, httpClient, opt.ClientID, opt.ClientSecret),
+		PlatformAPI: newPlatformClient(baseURL, httpClient, opt.ClientID, opt.ClientSecret, jwtIssuer),
 		EInvoiceAPI: newEInvoiceClient(baseURL, httpClient, *certWrapper, mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
 	}
 
@@ -148,4 +145,11 @@ func newRequestWithToken(token string, httpMethod, endpoint string, body io.Read
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	return req, nil
+}
+
+func myInvoisEnvConfig(env Environment) (MyInvoisBaseURL, string) {
+	if env == Production {
+		return ProdBaseURL, ProductionJwtIssuer
+	}
+	return SandboxBaseURL, SandboxJwtIssuer
 }
