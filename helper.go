@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"os"
 	"time"
 )
 
@@ -16,8 +15,6 @@ func signDocument(pkey *rsa.PrivateKey, iv Ubl21Invoice, cert x509CertWrapper) (
 	if err != nil {
 		return nil, err
 	}
-
-	_ = os.WriteFile("response/raw.json", docBytes, 0644)
 
 	docDigest := computeDigest(docBytes)
 	signedDocDigest, err := rsa.SignPKCS1v15(nil, pkey, crypto.SHA256, sha256Hash(docBytes))
