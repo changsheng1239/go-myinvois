@@ -28,16 +28,17 @@ var (
 	ErrDecodeCertificate        = errors.New("failed to decode certificate")
 	ErrParseCertificate         = errors.New("failed to parse certificate")
 	ErrSignFailed               = errors.New("failed to sign document")
+	ErrPrivateKeyRequired       = errors.New("private key is required for document submission")
 )
 
 type EInvoiceAPI struct {
 	baseURL    MyInvoisBaseURL
 	httpClient *http.Client
-	cert       x509CertWrapper
+	cert       *x509CertWrapper
 	privKey    *rsa.PrivateKey
 }
 
-func newEInvoiceClient(baseURL MyInvoisBaseURL, httpClient *http.Client, cert x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
+func newEInvoiceClient(baseURL MyInvoisBaseURL, httpClient *http.Client, cert *x509CertWrapper, pk *rsa.PrivateKey) EInvoiceAPI {
 	return EInvoiceAPI{
 		baseURL:    baseURL,
 		httpClient: httpClient,
@@ -294,7 +295,10 @@ func (e *EInvoiceAPI) SubmitDocuments(accessToken string, docs []Ubl21Invoice) (
 
 		d := &doc
 		if doc.Invoice[0].InvoiceTypeCode[0].ListVersionID != "1.0" {
-			signedDoc, err := signDocument(e.privKey, doc, e.cert)
+			if e.privKey == nil || e.cert == nil {
+				return nil, ErrPrivateKeyRequired
+			}
+			signedDoc, err := signDocument(e.privKey, doc, *e.cert)
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrSignFailed, err)
 			}
@@ -616,5 +620,8 @@ func (e *EInvoiceAPI) TaxpayerQrCode(accessToken string, id string) (*TaxpayerIn
 }
 
 func (e *EInvoiceAPI) SignDigest(digest []byte) ([]byte, error) {
+	if e.privKey == nil {
+		return nil, ErrPrivateKeyRequired
+	}
 	return rsa.SignPKCS1v15(nil, e.privKey, crypto.SHA256, digest)
 }

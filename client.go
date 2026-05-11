@@ -57,14 +57,23 @@ func newClient(opt ClientOption) *Client {
 		},
 	}
 
-	certWrapper, err := newCertWrapper(opt.Cert)
-	if err != nil {
-		log.Fatalf("NewCertWrapper failed: %v", err)
+	var certWrapper *x509CertWrapper
+	if opt.Cert != nil {
+		var err error
+		certWrapper, err = newCertWrapper(opt.Cert)
+		if err != nil {
+			log.Fatalf("NewCertWrapper failed: %v", err)
+		}
+	}
+
+	var privKey *rsa.PrivateKey
+	if opt.PrivKey != nil {
+		privKey = mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)
 	}
 
 	c := &Client{
 		PlatformAPI: newPlatformClient(baseURL, httpClient, opt.ClientID, opt.ClientSecret, jwtIssuer),
-		EInvoiceAPI: newEInvoiceClient(baseURL, httpClient, *certWrapper, mustParsePrivateKey(opt.PrivKey, opt.PrivKeyPass)),
+		EInvoiceAPI: newEInvoiceClient(baseURL, httpClient, certWrapper, privKey),
 	}
 
 	return c
@@ -77,10 +86,6 @@ func NewClient(opt ClientOption) *Client {
 
 	if opt.ClientID == "" || opt.ClientSecret == "" {
 		log.Fatalf("ClientID and ClientSecret are required")
-	}
-
-	if opt.Cert == nil || opt.PrivKey == nil || opt.PrivKeyPass == nil {
-		log.Fatalf("Cert, PrivKey, and PrivKeyPass are required")
 	}
 
 	if opt.Timeout == 0 {
